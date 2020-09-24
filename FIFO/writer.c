@@ -1,16 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <string.h>
-#include <errno.h>
-
-#define PRINTERROR(errorString) {fprintf(stderr, errorString); exit(EXIT_FAILURE);}
-
-//TODO Нужно написать две программы, один читает, второй пишет. файл не должен быть испорчен???,
-// можно пользоваться только файловым ip, нельзя lockами для синхронизации и прочем,один раз можно использовать на крайняк sleep.
+#include "libs.h"
 
 char* ReadFile(char* pathToFile);
 
@@ -23,25 +11,33 @@ int main(int argc, char** argv)
     char* buffer = ReadFile(argv[1]);
     size_t length = strlen(buffer);
 
-    int file_op = open(argv[1], O_RDONLY);
-    if (file_op < 0)
-        PRINTERROR("Can`t open file\n")
+    if (length > 4095)
+        fprintf(stderr, "WARNING:\nFile is bigger than 1 page");
 
     errno = 0;
-    int fifo_id = mkfifo("transferPipe_From", O_WRONLY);
-        if (fifo_id && errno != EEXIST) {
-            printf("ERRNO - %d\n", errno);
+    int create_fifo = mkfifo("transfer.p", 00600);
+        if (create_fifo && errno != EEXIST)
             PRINTERROR("Error in creating fifo of writer\n")
-        }
 
     errno = 0;
-    if (write(fifo_id, buffer, length) != length){
-        printf("ERRNO - %d\n", errno);
-        PRINTERROR("Could not write down text\n")
-    }
+    int fifo_id = open("transfer.p", O_WRONLY);
+    if (fifo_id < 0)
+        PRINTERROR("Could not open fifo\n");
+
+    errno = 0;
+    int writer_pid = 0;
+    int ret_read = read(fifo_id, &writer_pid, sizeof(writer_pid));
+    if (ret_read <= 0)
+        PRINTERROR("Can`t read pid from transfer fifo\n")
+
+
+    errno = 0;
+    int write_status = write(fifo_id, buffer, length);
+    if (write_status <= 0 && errno == EPIPE)
+            PRINTERROR("Transfer fifo died\n")
 
     close(fifo_id);
-    unlink("transferPipe_From");
+    unlink("transfer.p");
 
     return 0;
 }
