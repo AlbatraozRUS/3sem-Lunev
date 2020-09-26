@@ -8,4 +8,7 @@
 #include <errno.h>
 
 
-#define PRINTERROR(errorString) {fprintf(stderr, errorString); exit(EXIT_FAILURE);}
+#define PRINTERROR(condition, errorString)\
+ { if (#condition)\
+     {fprintf(stderr, errorString);\
+      exit(EXIT_FAILURE);}}
