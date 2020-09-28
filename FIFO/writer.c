@@ -14,7 +14,6 @@ int main(int argc, char** argv)
 
     pid_t pid = getpid();
 
-
     errno = 0;
     int create_common_fifo = mkfifo("common_fifo.p", 00600);
     if (create_common_fifo && errno != EEXIST)
@@ -28,6 +27,7 @@ int main(int argc, char** argv)
     int wr_common_st = write(common_fifo_id, fifo_name, 20);
     if (wr_common_st <= 0)
         PRINTERROR("Can`t write unique fifo_name to common fifo\n")
+
 
 
     errno = 0;
@@ -44,19 +44,28 @@ int main(int argc, char** argv)
     if (buffer == NULL)
         PRINTERROR("Can`t allocate memory\n")
 
-    for (errno = 0; read(file_id, buffer, 4096);) {
-        int write_status = write(fifo_id, buffer, 4096);
+    int read_st = 0;
+    errno = 0;
+    while ((read_st = read(file_id, buffer, 4096)) > 0){
+        int write_status = write(fifo_id, buffer, read_st);
+        printf("\n# > Written to fifo [%d]\n", write_status);
+
         if (write_status < 0 && errno == EPIPE)
             PRINTERROR("Transfer fifo died\n")
         if (write_status < 0)
             PRINTERROR("Can`t write down text :(\n")
+
+        if (write_status < 4096)
+                write(fifo_id, "\0", 1);
     }
 
-    unlink("common_fifo.p");
-    unlink(fifo_name);
-    close(fifo_id);
+    close(file_id);
     close(common_fifo_id);
+    unlink("common_fifo.p");
+    close(fifo_id);
+    unlink(fifo_name);
 
+    free(buffer);
     free(fifo_name);
 
     return 0;
@@ -72,13 +81,7 @@ char* GeneraneName(int pid)
     sprintf(fifo_name + 13, "%d", pid);
     strcat(fifo_name, ".p");
 
-    printf("# > Genetated name [%s]\n", fifo_name);
+    printf("\n# > Generated name [%s]\n", fifo_name);
 
     return fifo_name;
 }
-
-// errno = 0;
-// int writer_pid = 0;
-// int ret_read = read(fifo_id, &writer_pid, sizeof(writer_pid));
-// if (ret_read <= 0)
-//     PRINTERROR("Can`t read pid from transfer fifo\n")

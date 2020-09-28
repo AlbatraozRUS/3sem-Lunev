@@ -20,7 +20,6 @@ int main(){
     if (read_common_st <= 0)
         PRINTERROR("Can`t read fifo_name from common fifo\n")
 
-
     printf("# > Scanned fifo_name [%s]\n", fifo_name);
     errno = 0;
     int create_fifo = mkfifo(fifo_name, 00600);
@@ -37,17 +36,20 @@ int main(){
 
     errno = 0;
     int read_st = 0;
-    while ((read_st = read(fifo_id, buffer, 4096)) > 0)
+    while ((read_st = read(fifo_id, buffer, 4096)) > 0){
+        printf("\n# > Read from fifo [%d]\n", read_st);
         printf("%s", buffer);
+    }
 
     if (errno == EPIPE)
-        PRINTERROR("Transfer fifo died\n")
+        PRINTERROR("Fifo died\n")
 
 
-    unlink("common_fifo.p");
     unlink(fifo_name);
     close(fifo_id);
-    close(read_common_st);
+
+    unlink("common_fifo.p");
+    close(common_fifo_id);
 
     free(fifo_name);
     free(buffer);
