@@ -1,0 +1,4 @@
+#!/bin/bash
+
+rm *.p
+rm *.gch

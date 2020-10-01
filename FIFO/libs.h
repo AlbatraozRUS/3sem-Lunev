@@ -9,5 +9,6 @@
 
 
 #define PRINTERROR(errorString)\
-        {fprintf(stderr, errorString);\
+        {fprintf(stderr, "ATTENTION!\nError occured:");\
+         fprintf(stderr, errorString);\
          exit(EXIT_FAILURE);}
