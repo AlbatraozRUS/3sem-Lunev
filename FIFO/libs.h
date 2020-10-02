@@ -13,3 +13,11 @@
         {fprintf(stderr, "ATTENTION!\nError occured: ");\
          fprintf(stderr, errorString);\
          exit(EXIT_FAILURE);}
+
+//#define DEBUG_MODE
+
+#ifdef DEBUG_MODE
+    #define DBG if(1)
+#else
+    #define DBG if(0)
+#endif
