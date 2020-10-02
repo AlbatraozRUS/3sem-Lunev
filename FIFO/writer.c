@@ -1,81 +1,97 @@
 #include "libs.h"
 
+char* GenerateName(const pid_t pid);
+
 int main(int argc, char** argv)
 {
     if (argc != 2)
-        PRINTERROR("Invalid number of input args\n")
+        PRINTERROR("WRITER: Invalid number of arguments\n")
 
+    pid_t pid = getpid();
+    char* fifo_name = GenerateName(pid);
+    fprintf(stderr, " >> #Genetated name [%s]\n", fifo_name);
+
+    //Open file with text
+    int file_id = open(argv[1], O_RDONLY);
+    if (file_id < 0)
+        PRINTERROR("WRITER: Can`t open file with text\n")
+    fprintf(stderr, "WRITER: open(file)\n");
+
+    //Make common fifo for transfering unique name
     errno = 0;
-    int create_common_fifo = mkfifo("common_fifo.p", 00600);
-    if (create_common_fifo && errno != EEXIST)
-        PRINTERROR("Can`t create common_fifo\n")
+    int ret_com_fifo = mkfifo("common_fifo.f", 0666);
+    if (ret_com_fifo && errno != EEXIST)
+            PRINTERROR("WRITER: Can`t mkfifo common_fifo\n")
+    fprintf(stderr, "WRITER: mkfifo(common_fifo)\n");
 
-    int common_fifo_id = open("common_fifo.p", O_RDONLY);
+    //Open common fifo
+    int common_fifo_id = open("common_fifo.f", O_WRONLY);
     if (common_fifo_id < 0)
-        PRINTERROR("Can`t open common_fifo\n")
+        PRINTERROR("WRITER: Can`t open common_fifo\n")
+    fprintf(stderr, "WRITER: open(common_fifo)\n");
 
-    char* fifo_name = (char*) calloc(20, sizeof(char));
-    int rd_common_st = read(common_fifo_id, fifo_name, 20);
-    printf("# > Scanned fifo_name [%s]\n", fifo_name);
-    if (rd_common_st <= 0)
-        PRINTERROR("Can`t read unique fifo_name to common fifo\n")
+    //Write to common fifo unique name
+    int write_st = write(common_fifo_id, fifo_name, strlen(fifo_name));
+    if (write_st != strlen(fifo_name))
+        PRINTERROR("WRITER: Error in writing fifo_name to common_fifo\n")
+    fprintf(stderr, "WRITER: write(common_fifo)\n");
 
     close(common_fifo_id);
 
-    printf("I am here #1\n");
-
+    //Make fifo with unique name
     errno = 0;
-    int create_fifo = mkfifo(fifo_name, 00600);
-    if (create_fifo && errno != EEXIST)
-        PRINTERROR("Error in creating fifo of writer\n")
+    int ret_fifo = mkfifo(fifo_name, 0666);
+    if (ret_fifo && errno != EEXIST)
+            PRINTERROR("WRITER: Can`t mkfifo fifo_name\n")
+    fprintf(stderr, "WRITER: mkfifo(fifo_name)\n");
 
-    printf("I am here #2\n");
-
-    errno = 0;
-    int fifo_id = open(fifo_name, O_WRONLY);
+    //Open unique fifo
+    int fifo_id = open(fifo_name, O_WRONLY | O_NONBLOCK);
     if (fifo_id < 0)
-        PRINTERROR("Could not open fifo\n")
+        PRINTERROR("WRITER: Can`t open fifo_name\n")
+    fprintf(stderr, "WRITER: open(fifo_name)\n");
 
-    printf("I am here #3\n");
+    //Removing flag O_NONBLOCK
+    int ret_fctnl = fcntl(fifo_id, F_SETFL, O_WRONLY);
+    if (ret_fctnl == -1)
+        PRINTERROR("WRITER: Can`t change in fcntl\n")
+    fprintf(stderr, "WRITER: fcntl(common_fifo)\n");
 
-    char* buffer = (char*) calloc (4096, sizeof(char));
+    char* buffer = (char*) calloc(4096, 1);
     if (buffer == NULL)
-        PRINTERROR("Can`t allocate memory\n")
+        PRINTERROR("WRITER: Can`t allocate memory for buffer\n")
 
-    errno = 0;
-    int file_id = open(argv[1], O_RDONLY);
-    if (file_id < 0)
-        PRINTERROR("Can`t open file with text\n")
-
-    // int ret_fcntl = fcntl(fifo_id, F_SETFL, O_WRONLY);
-    // if (ret_fcntl < 0)
-    //     PRINTERROR("Error in fcntl\n");
-
-    int read_st = 0;
-    errno = 0;
-    while ((read_st = read(file_id, buffer, 4096)) > 0){
-        int write_status = write(fifo_id, buffer, read_st);
-        printf("\n# > Written to fifo [%d]\n", write_status);
-
-        if (write_status < 0 && errno == EPIPE)
-            PRINTERROR("Transfer fifo died\n")
-        if (write_status < 0)
-            PRINTERROR("Can`t write down text :(\n")
-
-        if (write_status < 4096)
-                write(fifo_id, "\0", 1);
+    //Reading text from file and writing to unique fifo
+    int read_st = -1;
+    while ((read_st = read(file_id, buffer, 4096)) != 0){
+        fprintf(stderr, "WRITER: read(fifo_name)\n");
+        int write_st = write(fifo_id, buffer, read_st);
+        if (write_st <= 0)
+            PRINTERROR("WRITER: Can`t write to fifo_name\n")
+        fprintf(stderr, "WRITER: write(fifo_name)\n");
     }
+
+    if (errno == EPIPE)
+        PRINTERROR("WRITER: Fifo died\n")
 
     close(file_id);
 
-    close(common_fifo_id);
-    //unlink("common_fifo.p");
-
     close(fifo_id);
-    unlink(fifo_name);
 
-    free(buffer);
-    free(fifo_name);
+    fprintf(stderr, "\n\n\nSUCCESS\n");
 
     return 0;
+}
+
+char* GenerateName(const pid_t pid)
+{
+    char* fifo_name = (char*) calloc(22, sizeof(char));
+    if (fifo_name == NULL)
+        PRINTERROR("WRITER: Can`t allocate memory for fifo_name\n")
+
+    strcat(fifo_name, "transfer_fifo");
+    sprintf(fifo_name + 13, "%d", pid);
+    strcat(fifo_name, ".f");
+
+    return fifo_name;
 }

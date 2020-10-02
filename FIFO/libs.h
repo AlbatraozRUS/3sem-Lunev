@@ -4,11 +4,12 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/select.h>
 #include <string.h>
 #include <errno.h>
 
 
 #define PRINTERROR(errorString)\
-        {fprintf(stderr, "ATTENTION!\nError occured:");\
+        {fprintf(stderr, "ATTENTION!\nError occured: ");\
          fprintf(stderr, errorString);\
          exit(EXIT_FAILURE);}

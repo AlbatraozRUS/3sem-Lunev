@@ -1,4 +1,4 @@
 #!/bin/bash
 
-rm *.p
-rm *.gch
+rm *.f
+#rm *.gch
