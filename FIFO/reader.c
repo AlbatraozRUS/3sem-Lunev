@@ -13,7 +13,7 @@ int main(){
     DBG fprintf(stderr, "READER: mkfifo(common_fifo)\n");
 
     //Open common fifo
-    int common_fifo_id = open("common_fifo.f", O_WRONLY /*| O_NONBLOCK*/);
+    int common_fifo_id = open("common_fifo.f", O_WRONLY);
     if (common_fifo_id < 0)
         PRINTERROR("READER: Can`t open common_fifo\n")
     DBG fprintf(stderr, "READER: open(common_fifo)\n");

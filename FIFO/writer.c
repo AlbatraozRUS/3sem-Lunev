@@ -44,7 +44,7 @@ int main(int argc, char** argv)
     DBG fprintf(stderr, "WRITER: mkfifo(fifo_name)\n");
 
     //Open unique fifo
-    int fifo_id = open(fifo_name, O_WRONLY /*| O_NONBLOCK*/);
+    int fifo_id = open(fifo_name, O_WRONLY);
     if (fifo_id < 0)
         PRINTERROR("WRITER: Can`t open fifo_name\n")
     DBG fprintf(stderr, "WRITER: open(fifo_name)\n");
@@ -71,7 +71,7 @@ int main(int argc, char** argv)
 
     //Reading text from file and writing to unique fifo
     int read_st = -1;
-    while ((read_st = read(file_id, buffer, 4096)) != 0){        
+    while ((read_st = read(file_id, buffer, 4096)) != 0){
         int write_st = write(fifo_id, buffer, read_st);
         if (write_st <= 0)
             PRINTERROR("WRITER: Can`t write to fifo_name\n")
