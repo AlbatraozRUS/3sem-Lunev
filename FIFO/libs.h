@@ -8,13 +8,16 @@
 #include <string.h>
 #include <errno.h>
 
+#pragma once
+
 
 #define PRINTERROR(errorString)\
         {fprintf(stderr, "ATTENTION!\nError occured: ");\
          fprintf(stderr, errorString);\
          exit(EXIT_FAILURE);}
 
-//#define DEBUG_MODE
+
+#define DEBUG_MODE
 
 #ifdef DEBUG_MODE
     #define DBG if(1)
