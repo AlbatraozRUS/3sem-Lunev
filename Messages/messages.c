@@ -2,79 +2,81 @@
 
 int main(int argc, char** argv)
 {
-    size_t numProcess = ScanNum(argc, argv);
 
-    key_t msgkey = msgget(70, IPC_CREAT | 0666);
-    if (msgkey < 0)
-       PRINTERROR("Can`t create queue\n")
+//--------------------------------------------------------------------------------------------------------	
+	size_t numProcess = ScanNum(argc, argv);
 
-    Send_Message(msgkey, numProcess);
+	key_t msgkey = msgget(IPC_PRIVATE, IPC_CREAT | 0666);
+	if (msgkey < 0)
+	   PRINTERROR("Can`t create queue\n")
+	DBG fprintf(stderr, "Queue was created successfully. Key - %d\n", msgkey);
 
-    for (size_t nProcess = 0; nProcess < numProcess; nProcess++){
-        pid_t pid = fork();
-        switch(pid) {
-            case -1: {fprintf(stderr, "Process %zu can`t be created\n", nProcess);
-                      abort();}
+//--------------------------------------------------------------------------------------------------------
+	pid_t parentPid = getpid();
+	//TODO И этот цикл тоже, надо переделать
+	for (size_t nProcess = 1; nProcess <= numProcess; nProcess++){
+		pid_t pid = fork();
+		switch(pid) {
 
-            case 0:  {fprintf(stderr, "CHILD: My PID - %d   My parent`s PID - %d\n", getpid(), getppid());
-                      ReceiveMessage(msgkey, nProcess);
-                      //wait();
-                      break;}
+			case -1: {fprintf(stderr, "Process %zu can`t be created\n", nProcess);//TODO Изменить обработку -1(уничтожить все процессы)
+					  abort();}
 
-            default: {fprintf(stderr, "PARENT: PID - %d\n", getpid());break;}
-            //          Send_Message(msgkey, numProcess); break;}
-        }
-    }
+			case 0:  {fprintf(stderr, "CHILD [%zu]: My PID - %d   My parent`s PID - %d\n", nProcess, getpid(), getppid());					  
+					  ReceiveMessage(msgkey, nProcess);
+					  return 0;}
 
-    int ret_rm = msgctl(msgkey, IPC_RMID, NULL);
-    if (ret_rm < 0)
-        PRINTERROR("Can`t remove queue\n")
+			default: {fprintf(stderr, "PARENT: PID - %d    My child`s PID - %d\n", getpid(), pid);
+					  Send_Message(msgkey, nProcess);
+					  break;}
+		}
+	}
 
-    return 0;
+
+	if (parentPid == getpid()){
+		int ret_rm = msgctl(msgkey, IPC_RMID, NULL);
+		if (ret_rm < 0)
+			PRINTERROR("Can`t remove queue\n")		
+	}
+
+	return 0;
 }
 
-void Send_Message(const key_t msgkey, const size_t numProcess)
+void Send_Message(const key_t msgkey, const size_t id)
 {
-    struct MsgBuf* msgs_snd = calloc(numProcess, sizeof(struct MsgBuf));
-    if (msgs_snd == NULL)
-        PRINTERROR("Can`t allocate memory for msgs_snd\n")
-
-    for (size_t nProcess = 0; nProcess < numProcess; nProcess++){
-        msgs_snd[nProcess].mtype = nProcess;
-
-        int ret_send = msgsnd(msgkey, &msgs_snd[nProcess], 0, 0/*IPC_NOWAIT*/);
-        if (ret_send < 0)
-            PRINTERROR("Can`t send message to queue\n")
-
-    }
+	struct MsgBuf msg_snd = {id};
+	
+	errno = 0;
+	int ret_send = msgsnd(msgkey, &msg_snd, 0, 0);
+	if (ret_send < 0)
+		PRINTERROR("Can`t send message to queue\n")			
 }
 
 void ReceiveMessage(const key_t msgkey, const size_t id)
 {
-    struct MsgBuf msg_rcv;
+	struct MsgBuf msg_rcv;
 
-    int ret_rcv = msgrcv(msgkey, &msg_rcv, 0, id, 0);
-    if (ret_rcv <= 0)
-        PRINTERROR("Error while receiving message from queue\n")
+	int ret_rcv = msgrcv(msgkey, &msg_rcv, 0, id, MSG_NOERROR);
+	if (ret_rcv < 0)
+		PRINTERROR("Error while receiving message from queue\n")
 
-    printf(">>#%zu   Result = %ld\n", id, msg_rcv.mtype);
+	printf(">>#%zu   Result = %ld\n", id, msg_rcv.mtype);
 }
 
 size_t ScanNum(const int argc, char** argv)
 {
-    //Check if input correctly
-    if (argc != 2){
-        fprintf(stderr, "Incorrect input\n");
-        abort();
-    }
+	//Check if input correctly
+	if (argc != 2){
+		fprintf(stderr, "Incorrect input\n");
+		abort();
+	}
 
-    char* endptr = calloc(10,1);
+	char* endptr = calloc(10,1);
 
-    unsigned long long N = strtoul(argv[1], &endptr, 10);
-    if (!(*endptr == '\0') || errno == ERANGE){
-        fprintf(stderr, "Something is wrong with your input\n");
-        abort();
-    }
+	unsigned long long N = strtoul(argv[1], &endptr, 10);
+	if (!(*endptr == '\0') || errno == ERANGE){
+		fprintf(stderr, "Something is wrong with your input\n");
+		abort();
+	}
 
-    return N;
+	return N;
 }

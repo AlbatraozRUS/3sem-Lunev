@@ -9,14 +9,14 @@
 #pragma once
 
 struct MsgBuf{
-    long mtype;    
+    long mtype;
 };
 
 #define PRINTERROR(errorString)\
         {fprintf(stderr, "ATTENTION!\nError occured: ");\
+         perror("");\
          fprintf(stderr, errorString);\
          exit(EXIT_FAILURE);}
-
 
 #define DEBUG_MODE
 
@@ -26,6 +26,6 @@ struct MsgBuf{
     #define DBG if(0)
 #endif
 
-void Send_Message(const key_t msgkey, const size_t numProcess);
+void Send_Message(const key_t msgkey, const size_t nProcess);
 void ReceiveMessage(const key_t msgkey, const size_t id);
 size_t ScanNum(const int argc, char** argv);
