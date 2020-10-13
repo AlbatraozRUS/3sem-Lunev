@@ -12,13 +12,11 @@ int main(int argc, char** argv)
 	DBG fprintf(stderr, "Queue was created successfully. Key - %d\n", msgkey);
 
 //--------------------------------------------------------------------------------------------------------
-	pid_t parentPid = getpid();
-	//TODO И этот цикл тоже, надо переделать
 	for (size_t nProcess = 1; nProcess <= numProcess; nProcess++){
 		pid_t pid = fork();
 		switch(pid) {
 
-			case -1: {fprintf(stderr, "Process %zu can`t be created\n", nProcess);//TODO Изменить обработку -1(уничтожить все процессы)
+			case -1: {fprintf(stderr, "Process %zu can`t be created\n", nProcess);
 					  abort();}
 
 			case 0:  {fprintf(stderr, "CHILD [%zu]: My PID - %d   My parent`s PID - %d\n", nProcess, getpid(), getppid());					  
@@ -30,13 +28,11 @@ int main(int argc, char** argv)
 					  break;}
 		}
 	}
-
-
-	if (parentPid == getpid()){
-		int ret_rm = msgctl(msgkey, IPC_RMID, NULL);
-		if (ret_rm < 0)
-			PRINTERROR("Can`t remove queue\n")		
-	}
+ 					//TODO Have to delete queue,
+					// but problem is that parent removes queue before child receives message
+//	int ret_rm = msgctl(msgkey, IPC_RMID, NULL);
+//	if (ret_rm < 0)
+//		PRINTERROR("Can`t remove queue\n")
 
 	return 0;
 }
@@ -53,7 +49,7 @@ void Send_Message(const key_t msgkey, const size_t id)
 
 void ReceiveMessage(const key_t msgkey, const size_t id)
 {
-	struct MsgBuf msg_rcv;
+	struct MsgBuf msg_rcv = {0};	
 
 	int ret_rcv = msgrcv(msgkey, &msg_rcv, 0, id, MSG_NOERROR);
 	if (ret_rcv < 0)
