@@ -5,6 +5,7 @@
 #include <sys/msg.h>
 #include <errno.h>
 #include <unistd.h>
+#include <string.h>
 
 #pragma once
 
@@ -18,7 +19,7 @@ struct MsgBuf{
          fprintf(stderr, errorString);\
          exit(EXIT_FAILURE);}
 
-#define DEBUG_MODE
+//#define DEBUG_MODE
 
 #ifdef DEBUG_MODE
     #define DBG if(1)
@@ -26,6 +27,6 @@ struct MsgBuf{
     #define DBG if(0)
 #endif
 
-void Send_Message(const key_t msgkey, const size_t nProcess);
-void ReceiveMessage(const key_t msgkey, const size_t id);
+void ParentSend(const key_t msgkey, const size_t nProcess);
+void ChildReceive(const key_t msgkey, const size_t id);
 size_t ScanNum(const int argc, char** argv);
