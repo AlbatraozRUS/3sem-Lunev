@@ -65,7 +65,9 @@ void ChildReceive(const key_t msgkey, const size_t id)
 		PRINTERROR("Error while receiving message from queue\n")
 	DBG fprintf(stderr, "Child_Receive(): message received, id - %zu\n", id);
 
-	printf(">>#%zu   Result = %ld\n", id, msg.mtype);	
+	printf(">>#%zu   Result = %ld\n", id, msg.mtype);
+	
+	fflush(0);
 
 	msg.mtype++;
 

@@ -30,3 +30,4 @@ struct MsgBuf{
 void ParentSend(const key_t msgkey, const size_t nProcess);
 void ChildReceive(const key_t msgkey, const size_t id);
 size_t ScanNum(const int argc, char** argv);
+
