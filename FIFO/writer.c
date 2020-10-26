@@ -19,7 +19,7 @@ int main(int argc, char** argv)
     DBG fprintf(stderr, "WRITER:[2] mkfifo(common_fifo)\n");
 
     //Open common fifo
-    int common_fifo_id = open("common_fifo.f", O_RDONLY);
+    int common_fifo_id = open("common_fifo.f", O_RDONLY);    
     if (common_fifo_id < 0)
         PRINTERROR("WRITER: Can`t open <common_fifo>\n")
     DBG fprintf(stderr, "WRITER:[3] open(common_fifo)\n");

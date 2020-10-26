@@ -41,17 +41,11 @@ int main(){
     int read_common_st = write(common_fifo_id, fifo_name, strlen(fifo_name));
     if (read_common_st < 0)
         PRINTERROR("READER: Error in writing <fifo_name> to common_fifo\n")
-    DBG fprintf(stderr, "READER:[5] write(common_fifo)\n");
-
-    DBG fprintf(stderr, " >> #Generated name [%s]\n", fifo_name);
+    DBG fprintf(stderr, "READER:[5] write(common_fifo)\n");    
 
     close(common_fifo_id);
 
-    //Remove fcntl of unique fifo
-    int ret_fcntl = fcntl(fifo_id, F_SETFL, O_RDONLY);
-    if (ret_fcntl)
-        PRINTERROR("READER: Error in fcntl\n")
-    DBG fprintf(stderr, "READER:[6] fcntl(fifo_name)\n");
+
 
     char* buffer = (char*) calloc(4096, 1);
     if (buffer == NULL)
@@ -60,7 +54,7 @@ int main(){
     int read_st = -1;
     int isEmpty = 1;
     errno = 0;
-    for (int i = 0; i < 5; i++){
+    for (int i = 0; i < 5; i++){          
         read_st = read(fifo_id, buffer, 4096);
         if (read_st < 0 || errno != 0)
             PRINTERROR("WRITER: Error in reading from pipe\n")
@@ -68,9 +62,17 @@ int main(){
             Print_Buffer(buffer, read_st);
             isEmpty = 0;
         }
-    }
+    }        
 
-    sleep(1);
+    
+    usleep(10000);      
+
+    //Remove fcntl of unique fifo
+    int ret_fcntl = fcntl(fifo_id, F_SETFL, O_RDONLY);
+    if (ret_fcntl)
+        PRINTERROR("READER: Error in fcntl\n")
+    DBG fprintf(stderr, "READER:[6] fcntl(fifo_name)\n");
+
 
     //Reading from unique fifo and printing text
     errno = 0;

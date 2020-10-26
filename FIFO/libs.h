@@ -13,6 +13,7 @@
 
 #define PRINTERROR(errorString)\
         {fprintf(stderr, "ATTENTION!\nError occured: ");\
+         perror("");\
          fprintf(stderr, errorString);\
          exit(EXIT_FAILURE);}
 
