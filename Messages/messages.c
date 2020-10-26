@@ -12,20 +12,34 @@ int main(int argc, char** argv)
 	DBG fprintf(stderr, "Queue was created successfully. Key - %d\n", msgkey);
 
 //--------------------------------------------------------------------------------------------------------
+	pid_t pid = -1;
+	int id = -1;
 	for (size_t nProcess = 1; nProcess <= numProcess; nProcess++){
-		pid_t pid = fork();
-		switch(pid) {
+		pid = fork();
 
-			case -1: {fprintf(stderr, "Process %zu can`t be created\n", nProcess);
-					  abort();}
+		if (pid == -1){
+			fprintf(stderr, "Process %zu can`t be created\n", nProcess);
+			abort();
+		}
 
-			case 0:  {DBG fprintf(stderr, "CHILD [%zu]: My PID - %d   My parent`s PID - %d\n", nProcess, getpid(), getppid());					  
-					  ChildReceive(msgkey, nProcess);
-					  return 0;}
+		if (pid == 0){
+			id = nProcess;
+			break;
+		}
+	}
 
-			default: {DBG fprintf(stderr, "PARENT: PID - %d    My child`s PID - %d\n", getpid(), pid);
-					  ParentSend(msgkey, nProcess);
-					  break;}
+	if (pid == 0){
+
+		DBG fprintf(stderr, "CHILD [%d]: My PID - %d   My parent`s PID - %d\n", id, getpid(), getppid());					  
+		ChildReceive(msgkey, id + 1);
+		return 0;	
+
+	}
+
+	else {
+		for (int nProcess = 1; nProcess <= numProcess; nProcess++){
+			DBG fprintf(stderr, "PARENT[%d]: PID - %d    My child`s PID - %d\n", nProcess, getpid(), pid);
+			ParentSend(msgkey, nProcess + 1);
 		}
 	}
  					
@@ -49,7 +63,7 @@ void ParentSend(const key_t msgkey, const size_t id)
 	DBG fprintf(stderr, "Parent_Send(): message send, id - %zu\n", id);
 
 	errno = 0;
-	int ret_rcv = msgrcv(msgkey, &msg, 0, id + 1, MSG_NOERROR);
+	int ret_rcv = msgrcv(msgkey, &msg, 0, id - 1, MSG_NOERROR);
 	if (ret_rcv < 0)
 		PRINTERROR("Can`t receive test message in Parent_Send()\n")
 	DBG fprintf(stderr, "Parent_Send(): test message received, id - %zu\n", id);	
@@ -65,11 +79,11 @@ void ChildReceive(const key_t msgkey, const size_t id)
 		PRINTERROR("Error while receiving message from queue\n")
 	DBG fprintf(stderr, "Child_Receive(): message received, id - %zu\n", id);
 
-	printf(">>#%zu   Result = %ld\n", id, msg.mtype);
+	printf(">>#%zu   Result = %ld\n", id - 1, msg.mtype - 1);
 	
 	fflush(0);
 
-	msg.mtype++;
+	msg.mtype--;
 
 	errno = 0;
 	int ret_send = msgsnd(msgkey, &msg, 0, 0);
