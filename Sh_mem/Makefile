@@ -3,7 +3,7 @@ CFLAGS=-std=c11 -c
 
 
 -all: writer.o reader.o
-	$(CC) -o writer writer.o && $(CC) -o reader reader.o && rm reader.o writer.o lib.h.gch
+	$(CC) -o writer writer.o && $(CC) -o reader reader.o && rm reader.o writer.o lib.h.gch && ./Finished
 
 writer.o:
 	$(CC) $(CFLAGS) writer.c lib.h

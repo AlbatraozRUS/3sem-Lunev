@@ -8,8 +8,13 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
+#include <stdbool.h>
 
-const int SIZE_SHM = 4096;
+enum Sems {
+	mutex = 0,
+	alive_r = 1,
+	alive_w = 2,	
+};
 
 #define PRINTERROR(errorString)\
         {fprintf(stderr, "ATTENTION!\nError occured: ");\
