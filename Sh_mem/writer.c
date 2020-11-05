@@ -7,7 +7,7 @@ int main(int argc, char** argv)
         PRINTERROR("WRITER: Invalid number of arguments\n")
 
     //Генерация ключа                
-    key_t key = ftok("/Users/albatraozrus/Desktop/Proga/3sem-Lunev/Sh_mem/.key", 1);
+    key_t key = ftok(FTOK_KEY_PATH, FTOK_KEY_NUMBER);
     if (key < 0)
         PRINTERROR("WRITER: Error in generating key\n")
     DBG fprintf(stderr, "WRITER: >>#Generated key - %d\n", key);
@@ -22,29 +22,16 @@ int main(int argc, char** argv)
     //Создание семафора
     errno = 0;
     int semid = -1;                    
-    if ((semid = semget(key, 3, 0666 | IPC_CREAT)) < 0)
+    if ((semid = semget(key, NUM_SEM, PERMISSION | IPC_CREAT)) < 0)
       PRINTERROR("WRITER: Can`t create semaphore\n")
     DBG fprintf(stderr, "[2] WRITER: Semaphore was created\n");
-    //DBG fprintf(stderr, "WRITER: >>#Semid - %d\n", semid);
     
-    //Блок sembuf для работы с семафорами
-    struct sembuf block    = {mutex, 1, 0};
-    struct sembuf wait     = {mutex, 0, 0};
-    struct sembuf unblock  = {mutex, -1, 0};
-    struct sembuf init     = {alive_w, 1 ,0};
-    struct sembuf start[2] = {        
-        {alive_r, -1, 0},
-        {alive_w, 1, 0}
-    };
-    struct sembuf finish = {alive_w, -1, 0};
-
     //Cоздание сегмента разделяемой памяти
     errno = 0;
     int shmid = -1;           
-    if ((shmid = shmget(key, 4096, 0666 | IPC_CREAT)) < 0)
+    if ((shmid = shmget(key, PAGE_SIZE, PERMISSION | IPC_CREAT)) < 0)
         PRINTERROR("WRITER: Can`t create shared memory\n")
-    DBG fprintf(stderr, "[3] WRITER: ShM was created\n");
-    //DBG fprintf(stderr, "WRITER: >>#Shmid - %d\n", shmid);
+    DBG fprintf(stderr, "[3] WRITER: ShM was created\n");   
 
     //Получение адреса разделяемой памяти
     errno = 0;   
@@ -53,49 +40,48 @@ int main(int argc, char** argv)
         PRINTERROR("WRITER: Can`t get address of SgM\n")  
     DBG fprintf(stderr, "[4] WRITER: Address of ShM was got\n");    
 
-    //Выставление семафора сигнализирующего о начале работы    
-    if (semop(semid, &init, 1) < 0)
-        PRINTERROR("READER: Error in semop(), which inits\n");
+    //Сигнализирование о начале работы
+    if (semop(semid, start, 3) < 0)
+        PRINTERROR("WRITER: Error in semop, while start()\n")  
+    if (semop(semid, &check_R, 1) < 0)
+        PRINTERROR("WRITER: Error in semop, while check_R()\n")
 
-    if (semop(semid, start, 2) < 0)
-        PRINTERROR("READER: Error in semop(), which starts\n");
+    DBG fprintf(stderr, "[5] WRITER: Started to write down to ShM\n");  
+
 
     //Цикл работы с отправкой сообщения
     errno = 0;      
     int ret_read = 1;
     while (ret_read > 0){
-        DBG fprintf(stderr, "[5] WRITER: Start to write to ShM\n");
-        //Проверка на доступ к работе
-        if (semop(semid, &wait, 1) < 0)
-            PRINTERROR("WRITER: Error in semop(), which waits\n")        
 
-        //Блок работы с памятью
-        //{
-        if (semop(semid, &block, 1) < 0)
-            PRINTERROR("WRITER: Error in semop(), which blocks\n")
+        if (semop(semid, &empty_dw, 1) < 0)
+            PRINTERROR("READER: Error in semop, while empty_dw()\n")
 
-        if ((ret_read = read(file_id, msg, 4096)) < 0)
-            PRINTERROR("WRITER: Error in reading from file and writting to ShMmem\n")
-        memset(msg + ret_read, '\0', 4096 - ret_read);
+        if (semop(semid, &mutex_dw, 1) < 0)
+            PRINTERROR("READER: Error in semop, while mutex_dw()\n")
 
-        if (semop(semid, &unblock, 1) < 0)
-            PRINTERROR("WRITER: Error in semop(), which unblocks\n")
-        //}
+        if ((ret_read = read(file_id, msg, PAGE_SIZE)) < 0)
+            PRINTERROR("READER: Can`t read from file\n")
+        memset(msg + ret_read, '\0', PAGE_SIZE - ret_read);
 
-        DBG fprintf(stderr, "[6] WRITER: Finish to write to ShM\n");
+        if (semop(semid, &mutex_up, 1) < 0)
+          PRINTERROR("READER: Error in semop, while mutex_up()\n")
 
+        if (semop(semid, &full_up, 1) < 0)
+            PRINTERROR("READER: Error in semop, while full_up()") 
     }
 
-    DBG fprintf(stderr, "[7] WRITER: Finally finished writting to ShM\n");
+    //Сигнализирование о конце работы
+    if  (semop(semid, &finish, 1) < 0)
+        PRINTERROR("READER: Error in semop, while start()\n") 
 
-    //Выставление семафора, сигнализирующего о конце работы
-    if (semop(semid, &finish, 1) < 0)
-        PRINTERROR("READER: Error in semop(), which finishes\n");
+    DBG fprintf(stderr, "[6] WRITER: Finally finished writting to ShM\n");
+
 
     //Отсоединение сегмента разделяемой памяти
     if (shmdt(msg) < 0)
         PRINTERROR("WRITER: Error in shmdt\n")
-    DBG fprintf(stderr, "[8] WRITER: ShM was shmdted\n");
+    DBG fprintf(stderr, "[7] WRITER: ShM was shmdted\n");
     
     close(file_id);
 
