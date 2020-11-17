@@ -17,7 +17,7 @@
          exit(EXIT_FAILURE);}
 
 
-//#define DEBUG_MODE
+#define DEBUG_MODE
 
 #ifdef DEBUG_MODE
     #define DBG if(1)
@@ -28,6 +28,7 @@
 void Handler_USR1(int sig);
 void Handler_USR2(int sig);
 void Handler_HUP(int sig);
+void Handler_PrntWait(int sig);
 
 void ChildFunc(char** argv);
 void ParentFunc(const pid_t child_pid);
