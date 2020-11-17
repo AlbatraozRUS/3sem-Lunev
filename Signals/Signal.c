@@ -34,6 +34,16 @@ void ChildFunc(char** argv)
     pid_t ppid = getppid();    
     int ret_read = -1;
 
+    struct sigaction wait_prnt;
+    memset(&wait_prnt, 0, sizeof(wait_prnt));
+    wait_prnt.sa_handler = Handler_PrntWait;
+    sigemptyset(&wait_prnt.sa_mask);
+    sigaction(SIGALRM, &wait_prnt, NULL);
+
+    sigset_t waiting;
+    sigfillset(&waiting);
+    sigdelset(&waiting, SIGALRM);
+
     while(true){
     	char cur_letter = 0;
     	ret_read = read(file_id, &cur_letter, 1);
@@ -49,6 +59,8 @@ void ChildFunc(char** argv)
 
     		char bit = mask & cur_letter;    		
 
+            sigsuspend(&waiting);
+            DBG fprintf(stderr, "CHILD: Send bit\n");   
     		if (bit == 0){
     			DBG fprintf(stderr, ">>#DEBUG: CHILD: Bit =  0\n");
     			if (kill(ppid, SIGUSR1) == -1)
@@ -58,8 +70,7 @@ void ChildFunc(char** argv)
     			DBG fprintf(stderr, ">>#DEBUG: CHILD: Bit = 1\n");
     			if (kill(ppid, SIGUSR2) == -1)
     				PRINTERROR("Child: Error in kill(SIGUSR2)\n")
-    		}
-    		usleep(1000); //TODO Should be avoided
+    		}    		                    
     	}    
     }    
     if (kill(ppid, SIGHUP) == -1)
@@ -76,7 +87,7 @@ void ParentFunc(const pid_t child_pid)
 
 	memset(&sig_USR1, 0, sizeof(sig_USR1));
 	memset(&sig_USR2, 0, sizeof(sig_USR2));
-	memset(&sig_HUP, 0, sizeof(sig_HUP));
+	memset(&sig_HUP,  0, sizeof(sig_HUP));
 
 	sig_USR1.sa_handler = Handler_USR1;
 	sig_USR2.sa_handler = Handler_USR2;
@@ -108,8 +119,12 @@ void ParentFunc(const pid_t child_pid)
 		for (int i = 0; i < 8; i++){
 			char mask = 0x01 << i;
 
+            kill(child_pid, SIGALRM);
+            DBG fprintf(stderr, "PARENT: Send signal to child\n");            
+            
 			if (sigsuspend(&wait_sig) != -1)
 				PRINTERROR("Parent: Error in sigsuspend()")
+            DBG fprintf(stderr, "PARENT: Receive bit\n");
 
 			if (cur_bit)
                 cur_letter = cur_letter | mask;
@@ -118,7 +133,7 @@ void ParentFunc(const pid_t child_pid)
 		}
 
 		printf("%c", cur_letter);
-
+        fflush(0);
 	}		
 }
 
@@ -143,4 +158,7 @@ void Handler_HUP(int sig)
 	exit(EXIT_SUCCESS);
 }
 
-//Hello
+void Handler_PrntWait(int sig)
+{
+    return;
+}
