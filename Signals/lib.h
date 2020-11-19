@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <stdbool.h>
+#include <sys/prctl.h>
 
 #pragma once
 
@@ -17,7 +18,7 @@
          exit(EXIT_FAILURE);}
 
 
-#define DEBUG_MODE
+//#define DEBUG_MODE
 
 #ifdef DEBUG_MODE
     #define DBG if(1)
@@ -25,10 +26,13 @@
     #define DBG if(0)
 #endif
 
+const int nBits = 8;
+
 void Handler_USR1(int sig);
 void Handler_USR2(int sig);
-void Handler_HUP(int sig);
-void Handler_PrntWait(int sig);
+void Handler_CHLD_Died(int sig);
+void Handler_Prnt_Wait(int sig);
+void Handler_Prnt_Died(int sig);
 
-void ChildFunc(char** argv);
+void ChildFunc(char** argv, const pid_t ppid);
 void ParentFunc(const pid_t child_pid);
