@@ -43,13 +43,6 @@ int main(int argc, char** argv)
     if (buffer == NULL)
         PRINTERROR("WRITER, Can`t allocate memory for buffer\n")
 
-    //Make fifo with unique name
-    errno = 0;
-    int ret_fifo = mkfifo(fifo_name, 0666);
-    if (ret_fifo && errno != EEXIST)
-            PRINTERROR("WRITER: Can`t mkfifo <fifo_name>\n")
-    DBG fprintf(stderr, "WRITER:[5] mkfifo(fifo_name)\n");
-
     //Open unique fifo
     int fifo_id = open(fifo_name, O_WRONLY | O_NONBLOCK);
     if (fifo_id < 0)
@@ -60,20 +53,20 @@ int main(int argc, char** argv)
     int ret_fcntl = fcntl(fifo_id, F_SETFL, O_WRONLY);
     if (ret_fcntl)
         PRINTERROR("WRITER: Error in fcntl\n")
-    DBG fprintf(stderr, "WRITER:[7] fcntl(fifo_name)\n");
+    DBG fprintf(stderr, "WRITER:[7] fcntl(fifo_name)\n");    
 
     //Reading text from file and writing to unique fifo
     errno = 0;
     int read_st = -1;
-    while ((read_st = read(file_id, buffer, 4096)) != 0){
-        if (read_st < 0)
-            PRINTERROR("READER: Error in reading file\n")
+    while ((read_st = read(file_id, buffer, 4096)) != 0){        
 
         int write_st = write(fifo_id, buffer, read_st);
         if (write_st <= 0)
             PRINTERROR("WRITER: Can`t write to <fifo_name>\n")
         DBG fprintf(stderr, "WRITER:[8] write(fifo_name)\n");
     }
+    if (read_st < 0)
+            PRINTERROR("READER: Error in reading file\n")
 
     if (errno == EPIPE)
         PRINTERROR("WRITER: Fifo died\n")

@@ -10,42 +10,40 @@ int main(){
     char* fifo_name = GenerateName(pid);
     DBG fprintf(stderr, " >> #Generated name [%s]\n", fifo_name);
 
-    //Make unique fifo
-    errno = 0;
-    int ret_fifo = mkfifo(fifo_name, 0666);
-    if (ret_fifo && errno != EEXIST)
-        PRINTERROR("READER: Can`t mkfifo <fifo_name>\n")
-    DBG fprintf(stderr, "READER:[1] mkfifo(fifo_name)\n");
-
-    //Open unique fifo
-    int fifo_id = open(fifo_name, O_RDONLY | O_NONBLOCK);
-    if (fifo_id < 0)
-        PRINTERROR("Can`t open <fifo_name>\n")
-    DBG fprintf(stderr, "READER:[2] open(fifo_name)\n");
-
     //Make common fifo for transfering unique name
     errno = 0;
     int ret_com_fifo = mkfifo("common_fifo.f", 0666);
     if (ret_com_fifo && errno != EEXIST)
         PRINTERROR("Can`t mkfifo <common_fifo>\n")
-    DBG fprintf(stderr, "READER:[3] mkfifo(common_fifo)\n");
+    DBG fprintf(stderr, "READER:[1] mkfifo(common_fifo)\n");
 
     //Open common fifo
     int common_fifo_id = open("common_fifo.f", O_WRONLY);
     if (common_fifo_id < 0)
         PRINTERROR("READER: Can`t open <common_fifo>\n")
-    DBG fprintf(stderr, "READER:[4] open(common_fifo)\n");
+    DBG fprintf(stderr, "READER:[2] open(common_fifo)\n");
+
+    //Make unique fifo
+    errno = 0;
+    int ret_fifo = mkfifo(fifo_name, 0666);
+    if (ret_fifo && errno != EEXIST)
+        PRINTERROR("READER: Can`t mkfifo <fifo_name>\n")
+    DBG fprintf(stderr, "READER:[3] mkfifo(fifo_name)\n");
+
+    //Open unique fifo
+    int fifo_id = open(fifo_name, O_RDONLY | O_NONBLOCK);
+    if (fifo_id < 0)
+        PRINTERROR("Can`t open <fifo_name>\n")
+    DBG fprintf(stderr, "READER:[4] open(fifo_name)\n");    
 
 
-    //Write to common fifo unique name
+    //Write to common fifo unique fifo_name
     int read_common_st = write(common_fifo_id, fifo_name, strlen(fifo_name));
     if (read_common_st < 0)
         PRINTERROR("READER: Error in writing <fifo_name> to common_fifo\n")
     DBG fprintf(stderr, "READER:[5] write(common_fifo)\n");    
 
-    close(common_fifo_id);
-
-
+    close(common_fifo_id);            
 
     char* buffer = (char*) calloc(4096, 1);
     if (buffer == NULL)
@@ -55,17 +53,23 @@ int main(){
     int isEmpty = 1;
     errno = 0;
     for (int i = 0; i < 5; i++){          
-        read_st = read(fifo_id, buffer, 4096);
-        if (read_st < 0 || errno != 0)
-            PRINTERROR("WRITER: Error in reading from pipe\n")
+
+        read_st = read(fifo_id, buffer, 4096);        
+
         if (read_st > 0){
             Print_Buffer(buffer, read_st);
             isEmpty = 0;
+            break;
         }
-    }        
 
-    
-    usleep(10000);      
+        usleep(1000);  
+
+        if (errno == EPIPE)
+            PRINTERROR("READER: Fifo died\n")                                   
+    }   
+
+    if (read_st < 0)
+        PRINTERROR("READER: Error in reading from fifo\n")    
 
     //Remove fcntl of unique fifo
     int ret_fcntl = fcntl(fifo_id, F_SETFL, O_RDONLY);
@@ -78,11 +82,11 @@ int main(){
     errno = 0;
     while ((read_st = read(fifo_id, buffer, 4096)) > 0){
 
-    if (errno == EPIPE)
-        PRINTERROR("READER: Fifo died\n")
+        if (errno == EPIPE)
+            PRINTERROR("READER: Fifo died\n")
 
-    isEmpty = 0;
-    Print_Buffer(buffer, read_st);
+        isEmpty = 0;
+        Print_Buffer(buffer, read_st);
 
 }
     if (read_st < 0 || errno != 0)
