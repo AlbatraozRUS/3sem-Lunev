@@ -18,7 +18,7 @@
          exit(EXIT_FAILURE);}
 
 
-#define DEBUG_MODE
+//#define DEBUG_MODE
 
 #ifdef DEBUG_MODE
     #define DBG if(1)
