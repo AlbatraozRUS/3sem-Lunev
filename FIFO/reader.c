@@ -3,7 +3,10 @@
 void Print_Buffer(const char* buffer, const int length);
 char* GenerateName(const pid_t pid);
 
-int main(){
+int main(int argc, char** argv){
+
+    if (argc != 1)
+        fprintf(stderr, "READER: WARNING: No agruments are needed\n");
 
     //Generating unique name for fifo
     pid_t pid = getpid();
@@ -57,6 +60,7 @@ int main(){
         read_st = read(fifo_id, buffer, 4096);        
 
         if (read_st > 0){
+            DBG fprintf(stderr, "READER: First read [%d]\n", i);
             Print_Buffer(buffer, read_st);
             isEmpty = 0;
             break;
@@ -81,6 +85,8 @@ int main(){
     //Reading from unique fifo and printing text
     errno = 0;
     while ((read_st = read(fifo_id, buffer, 4096)) > 0){
+
+        DBG fprintf(stderr, "READER: read(fifo_id)\n");
 
         if (errno == EPIPE)
             PRINTERROR("READER: Fifo died\n")
@@ -132,6 +138,6 @@ void Print_Buffer(const char* buffer, const int length)
         PRINTERROR("READER: Pointer to buffer is null in Print_Buffer\n")
 
     int write_st = write(STDOUT_FILENO, buffer, length);
-    if (write_st != strlen(buffer))
+    if (write_st == -1)
         PRINTERROR("READER: Error while writing to stdout\n")
 }
