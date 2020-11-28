@@ -30,6 +30,20 @@ struct ChildInfo {
 	int fifoFromPrnt[2];
 };
 
+struct Connection {
+    int fd_writer;
+    int fd_reader;
+
+    size_t buf_size;
+    char* buffer;
+
+    size_t iRead;
+    size_t iWrite;    
+
+    size_t size;
+    size_t empty;
+};
+
 #define DEBUG_MODE
 
 #ifdef DEBUG_MODE
@@ -38,7 +52,7 @@ struct ChildInfo {
     #define DBG if(0)
 #endif
 
-size_t ScanNum(char** argv);         
+size_t ScanNum(char* number_str);    
 void ChildFunction(struct ChildInfo* childInfo, char* filePath);
 void ParentFunction(struct ChildInfo* childInfos, const size_t numChilds);
-
+size_t CountSize(const unsigned nChild, const unsigned numChilds);

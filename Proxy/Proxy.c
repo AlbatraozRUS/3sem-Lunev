@@ -8,7 +8,7 @@ int main(int argc, char** argv)
 	if (argc != 3)
 		PRINTERROR("Error: Incorrect input\n")			
 
-	size_t numChilds = ScanNum(argv);		
+	size_t numChilds = ScanNum(argv[1]);		
 
 	struct ChildInfo* childInfos = calloc(numChilds, sizeof(struct ChildInfo));
 	
@@ -73,21 +73,21 @@ void ChildFunction(struct ChildInfo* childInfo, char* filePath)
 
 void ParentFunction(struct ChildInfo* childInfos, const size_t numChilds)
 {
-	for (unsigned  nChild = 0; nChild < numChilds; nChild++){
-
-		if (close(childInfos[nChild].fifoFromPrnt[READ]) == -1)
-			PRINTERROR("Child: Can`t close pipe from parent [write]\n")
-
-		if (close(childInfos[nChild].fifoToPrnt[WRITE]) == -1)
-			PRINTERROR("Child: Can`t close pipe from parent [write]\n")
-	}
-
 	int maxFD = -1;
+	fd_set fd_writers, fd_readers;
+	FD_ZERO(&fd_writers);
+	FD_ZERO(&fd_readers);
 
-	for (unsigned nChild = 0; nChild < numChilds; nChild++){
-		fd_set fd_writers, fd_readers;
-		FD_ZERO(&fd_readers);
-		FD_ZERO(&fd_writers);
+	struct Connection* connections = calloc(numChilds, sizeof(struct Connection));
+	if (connections == NULL)
+		PRINTERROR("Parent: Error in calloc(connections)\n")
+
+//ATTENTION 	
+//FOLLOWING CODE IS JUST A PROTOTYPE (OR A PLAN WHAT TO DO)
+//WILL BE CORRECTED SOON :)	
+
+
+	for (size_t nChild = 0; nChild < numChilds; nChild++){	
 
 		FD_SET(childInfos[nChild].fifoFromPrnt[WRITE], &fd_writers);
 		FD_SET(childInfos[nChild].fifoToPrnt[READ], &fd_readers);
@@ -95,21 +95,57 @@ void ParentFunction(struct ChildInfo* childInfos, const size_t numChilds)
 		if (childInfos[nChild].fifoFromPrnt[WRITE] > maxFD)
 			maxFD = childInfos[nChild].fifoFromPrnt[WRITE];
 		if (childInfos[nChild].fifoToPrnt[READ] > maxFD)
-			maxFD = childInfos[nCh			ьфчАВ = сршдвШтащыхтСршдвъюашащЕщЗктехКУФВъж
-ild].fifoToPrnt[READ];
+			maxFD = childInfos[nChild].fifoToPrnt[READ];
+
+		connections[nChild].buf_size = CountSize(nChild, numChilds);
+		connections[nChild].buffer = calloc(connections[nChild].buf_size, 1);
+
+		connections[nChild].iRead = 0;
+		connections[nChild].iWrite = 0;
+
+		connections[nChild].size = 0;
+		connections[nChild].empty = connections[nChild].buf_size;
+
+		connections[nChild].fd_reader = childInfos[nChild].fifoFromPrnt[READ];
+
+		if (nChild == numChilds -1)
+			connections[nChild].fd_writer = STDOUT_FILENO;
+		else
+			connections[nChild].fd_writer = childInfos[nChild].fifoToPrnt[WRITE];
+
+		if (close(childInfos[nChild].fifoFromPrnt[READ]) == -1)
+			PRINTERROR("Child: Can`t close pipe from parent [write]\n")
+
+		if (close(childInfos[nChild].fifoToPrnt[WRITE]) == -1)
+			PRINTERROR("Child: Can`t close pipe from parent [write]\n")
+
+
 	}
+
+		if (select(maxFD + 1, &fd_readers, &fd_writers, NULL, NULL) == -1)
+			PRINTERROR("Parent: Error in select\n")		
+
+		for (size_t nChild = 0; nChild < numChilds; nChild++){
+
+			if (FD_ISSET(connections[nChild].fd_reader, &fd_readers) && connections[nChild].empty > 0)
+				Read;
+
+			if (FD_ISSET(connections[nChild].fd_writer, &fd_writers) && connections[nChild].size > 0)
+				Write;
+
+		}
 }
 
 size_t CountSize(const unsigned nChild, const unsigned numChilds)
-{
-	return pow(3, numChilds - nChild) * 1024;
+{	
+	return pow(3, numChilds - nChild) * 1024;	
 }
 
-size_t ScanNum(char** argv)
+size_t ScanNum(char* number_str)
 {
 	char* endptr = calloc(10,1);
 
-	unsigned long long N = strtoul(argv[1], &endptr, 10);
+	unsigned long long N = strtoul(number_str, &endptr, 10);
 	if (!(*endptr == '\0') || errno == ERANGE){
 		fprintf(stderr, "Something is wrong with your input\n");
 		abort();
