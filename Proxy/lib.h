@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <math.h>
 #include <sys/select.h>
+#include <signal.h>
 
 #pragma once
 
@@ -17,11 +18,13 @@ enum MODES{
 	WRITE = 1,
 };
 
+//#define DEBUG_MODE
+
 #define PRINTERROR(errorString)\
         {fprintf(stderr, "ATTENTION!\nError occured: ");\
          perror("");\
          fprintf(stderr, errorString);\
-         exit(EXIT_FAILURE);}
+         exit(EXIT_FAILURE);}   
 
 struct ChildInfo {
 	unsigned id;
@@ -44,8 +47,6 @@ struct Connection {
     size_t empty;
 };
 
-#define DEBUG_MODE
-
 #ifdef DEBUG_MODE
     #define DBG if(1)
 #else
@@ -56,3 +57,6 @@ size_t ScanNum(char* number_str);
 void ChildFunction(struct ChildInfo* childInfo, char* filePath);
 void ParentFunction(struct ChildInfo* childInfos, const size_t numChilds);
 size_t CountSize(const unsigned nChild, const unsigned numChilds);
+void WriteFromBuffer(struct Connection* connection, int id);
+void ReadToBuffer(struct Connection* connection, int id);
+
