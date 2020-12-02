@@ -10,6 +10,7 @@
 #include <math.h>
 #include <sys/select.h>
 #include <signal.h>
+//#include <sys/prctl.h>
 
 #pragma once
 
@@ -18,7 +19,7 @@ enum MODES{
 	WRITE = 1,
 };
 
-//#define DEBUG_MODE
+#define DEBUG_MODE
 
 #define PRINTERROR(errorString)\
         {fprintf(stderr, "ATTENTION!\nError occured: ");\
@@ -28,6 +29,7 @@ enum MODES{
 
 struct ChildInfo {
 	unsigned id;
+    pid_t pid;
 
 	int fifoToPrnt[2];
 	int fifoFromPrnt[2];
@@ -59,4 +61,4 @@ void ParentFunction(struct ChildInfo* childInfos, const size_t numChilds);
 size_t CountSize(const unsigned nChild, const unsigned numChilds);
 void WriteFromBuffer(struct Connection* connection, int id);
 void ReadToBuffer(struct Connection* connection, int id);
-
+void TrackPrntDied(pid_t ppid);

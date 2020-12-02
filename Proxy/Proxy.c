@@ -2,6 +2,9 @@
 
 //Нихуя не понятно, но очень интересно
 
+//Update: Стало чуть понятнее, но пока все еще интересно
+
+//TODO Не работает select (виснет), проблема с кольцевым буфером
 int main(int argc, char** argv)
 {
 	// if (argc != 3){
@@ -9,9 +12,10 @@ int main(int argc, char** argv)
 	// }	
 
 	//size_t numChilds = ScanNum(argv[1]);
-	size_t numChilds = 100;
+	size_t numChilds = 8;
 
 	struct ChildInfo* childInfos = calloc(numChilds, sizeof(struct ChildInfo));
+	pid_t ppid = getpid();
 
 	for (unsigned nChild = 0; nChild < numChilds; nChild++){
 
@@ -26,9 +30,12 @@ int main(int argc, char** argv)
 
 			case -1: {PRINTERROR("Error in fork()\n")}
 
-			case 0:  {childInfos[nChild].id = nChild;
+			case 0:  {
+					  TrackPrntDied(ppid);
+					  childInfos[nChild].id = nChild;
 					  ChildFunction(&childInfos[nChild], "text.txt"); 
-					  exit(EXIT_SUCCESS);}
+					  exit(EXIT_SUCCESS);
+					 }
 
 			default: {continue;}
 		}
@@ -51,6 +58,7 @@ void ChildFunction(struct ChildInfo* childInfo, char* filePath)
 		PRINTERROR("Child: Can`t close pipe to parent [READ]\n")
 
 	int fd_reader = -1;
+	childInfo->pid = getpid();
 
 	if (childInfo->id == 0)
 		fd_reader = open(filePath, O_RDONLY);		
@@ -91,30 +99,11 @@ void ParentFunction(struct ChildInfo* childInfos, const size_t numChilds)
 	if (connections == NULL)
 		PRINTERROR("Parent: Error in calloc(connections)\n")
 
-//ATTENTION 	
-//FOLLOWING CODE IS JUST A PROTOTYPE (OR A PLAN WHAT TO DO)
-//WILL BE CORRECTED SOON :)	
-
-
 	for (size_t nChild = 0; nChild < numChilds; nChild++){	
-
-		//Preparing for select()
-		//{
-		FD_ZERO(&fd_writers);
-		FD_ZERO(&fd_readers);
-		FD_SET(childInfos[nChild].fifoFromPrnt[WRITE], &fd_writers);
-		FD_SET(childInfos[nChild].fifoToPrnt[READ], &fd_readers);
-
-		if (childInfos[nChild].fifoToPrnt[READ] > maxFD)
-			maxFD = childInfos[nChild].fifoToPrnt[READ];
-		if (childInfos[nChild].fifoFromPrnt[WRITE] > maxFD)
-			maxFD = childInfos[nChild].fifoFromPrnt[WRITE];
-		//}
 
 		//Preparing buffer
 		//{				
-		connections[nChild].buf_size = 1024;
-		//connections[nChild].buf_size = CountSize(nChild, numChilds);
+		connections[nChild].buf_size = CountSize(nChild, numChilds);		
 		connections[nChild].buffer = calloc(connections[nChild].buf_size, 1);
 
 		connections[nChild].iRead = 0;
@@ -140,6 +129,19 @@ void ParentFunction(struct ChildInfo* childInfos, const size_t numChilds)
 			PRINTERROR("Child: Can`t close pipe to parent [write]\n")
 		}
 
+		//Preparing for select()
+		//{
+		FD_ZERO(&fd_writers);
+		FD_ZERO(&fd_readers);
+		FD_SET(connections[nChild].fd_reader, &fd_readers);
+		FD_SET(connections[nChild].fd_writer, &fd_writers);
+
+		if (connections[nChild].fd_reader > maxFD)
+			maxFD = connections[nChild].fd_reader;
+		if (connections[nChild].fd_writer > maxFD)
+			maxFD = connections[nChild].fd_writer;
+		//}
+
 		// if (select(maxFD + 1, &fd_readers, &fd_writers, NULL, NULL) < 1)
 		// 	PRINTERROR("Parent: Error in select\n")
 	}
@@ -150,24 +152,20 @@ void ParentFunction(struct ChildInfo* childInfos, const size_t numChilds)
 		for (size_t nChild = 0; nChild < numChilds; nChild++){
 
 			DBG fprintf(stderr, "Parent: [%zu] FDISSET = %d, empty = %d\n", nChild, FD_ISSET(connections[nChild].fd_reader, &fd_readers), connections[nChild].empty > 0);
-			// if (FD_ISSET(connections[nChild].fd_reader, &fd_readers) && connections[nChild].empty > 0)				
+			 if (FD_ISSET(connections[nChild].fd_reader, &fd_readers) && connections[nChild].empty > 0)				
 				ReadToBuffer(&connections[nChild], nChild);			
 
 			DBG fprintf(stderr, "Parent: [%zu] FDISSET = %d, size = %d\n", nChild, FD_ISSET(connections[nChild].fd_writer, &fd_writers), connections[nChild].size > 0);
-			// if (FD_ISSET(connections[nChild].fd_writer, &fd_writers) && connections[nChild].size > 0)
+			if (FD_ISSET(connections[nChild].fd_writer, &fd_writers) && connections[nChild].size > 0)
 				WriteFromBuffer(&connections[nChild], nChild);		
 		}
 		DBG fprintf(stderr, "\n}\n");
 
-		for (size_t nChild = 0; nChild < numChilds; nChild++){
-			free(connections[nChild].buffer);
-
-			if (close(childInfos[nChild].fifoFromPrnt[WRITE]) == -1)
-				PRINTERROR("Child: Can`t close pipe from parent [write]\n")
-
-			if (close(childInfos[nChild].fifoToPrnt[READ]) == -1)
-				PRINTERROR("Child: Can`t close pipe to parent [read]\n")			
-		}
+		// for (size_t nChild = 0; nChild < numChilds; nChild++){
+		// 	if (waitpid(childInfos[nChild].pid, NULL, 0) < 0)
+		// 		PRINTERROR("Parent: Error in waitpid()\n")	
+		// 	fprintf(stderr, "Child [%zu] died\n", nChild);				
+		// }
 
 		free(connections);
 		free(childInfos);
@@ -175,19 +173,69 @@ void ParentFunction(struct ChildInfo* childInfos, const size_t numChilds)
 
 void ReadToBuffer(struct Connection* connection, int id)
 {
-	connection->size += read(connection->fd_reader, connection->buffer, 4096);
+	int ret_read =  read(connection->fd_reader, &connection->buffer[connection->iRead], connection->empty);
+	if (ret_read < 0)
+		PRINTERROR("Child: ReadToBuffer: Error in read()\n")
+
+	if (ret_read == 0){
+		close(connection->fd_reader);
+		connection->fd_reader = -1;
+	}
+
+	if (connection->iRead + ret_read == connection->buf_size){
+		connection->iRead = 0;
+		connection->size += ret_read;
+		connection->empty = connection->iWrite;
+	}
+	else {
+
+		if (connection->iRead >= connection->iWrite)
+			connection->size += ret_read;
+		connection->empty -= ret_read;
+		connection->iRead += ret_read;	
+	}
+
+
 	DBG fprintf(stderr, "Child:[%d] ReadToBuffer {%s}\n", id, connection->buffer);
+	
 }
 
 void WriteFromBuffer(struct Connection* connection, int id)
 {
-	connection->empty += write(connection->fd_writer, connection->buffer, connection->size);
+	int ret_write =  write(connection->fd_writer, &connection->buffer[connection->iWrite], connection->size);
+	if (ret_write < 0)
+		PRINTERROR("Child: ReadToBuffer: Error in read()\n")
+
 	DBG fprintf(stderr, "Child:[%d] WriteFromBuffer {%s}\n", id, connection->buffer);
+
+	if (connection->iWrite + ret_write == connection->buf_size){	
+
+		connection->iWrite = 0;
+		connection->empty += ret_write;
+		connection->size = connection->iRead;
+        }
+	else {
+
+		if (connection->iWrite >= connection->iRead)
+            connection->empty += ret_write;
+		connection->size -= ret_write;
+        connection->iWrite += ret_write;
+	}
+	
 }
 
 size_t CountSize(const unsigned nChild, const unsigned numChilds)
 {	
 	return pow(3, numChilds - nChild) * 1024;	
+}
+
+void TrackPrntDied(pid_t ppid)
+{
+    // if prctl((PR_SET_PDEATHSIG, SIGTERM) < 0)
+    // 	PRINTERROR("Error in prctl()\n")
+
+    if (ppid != getppid())
+    	PRINTERROR("Error: ppid != getppid()\n")           
 }
 
 size_t ScanNum(char* number_str)
