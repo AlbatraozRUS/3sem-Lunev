@@ -1,2 +1,3 @@
 #!/bin/bash
-echo -e "\nCompilation done successfully\n"
+echo -e "\nCompilation done successfully\n
+---------------------------------------------------------------------------------------------------\n"

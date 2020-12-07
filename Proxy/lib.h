@@ -45,7 +45,7 @@ struct Connection {
     size_t iRead;
     size_t iWrite;    
 
-    size_t size;
+    size_t busy;
     size_t empty;
 };
 
@@ -62,3 +62,5 @@ size_t CountSize(const unsigned nChild, const unsigned numChilds);
 void WriteFromBuffer(struct Connection* connection, int id);
 void ReadToBuffer(struct Connection* connection, int id);
 void TrackPrntDied(pid_t ppid);
+void PrepareBuffer(struct Connection* connections, struct ChildInfo* childInfos, 
+                               const size_t nChild, const size_t numChilds);
