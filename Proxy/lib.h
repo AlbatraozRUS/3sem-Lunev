@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -11,7 +10,7 @@
 #include <math.h>
 #include <sys/select.h>
 #include <signal.h>
-//#include <sys/prctl.h>
+#include <sys/prctl.h>
 
 #pragma once
 
@@ -19,6 +18,8 @@ enum MODES{
     READ = 0,
     WRITE = 1,
 };
+
+const size_t MAXBUFFSIZE = 1000000;
 
 //#define DEBUG_MODE
 
@@ -65,3 +66,4 @@ void ReadToBuffer(struct Connection* connection, const int id);
 void TrackPrntDied(pid_t ppid);
 void PrepareBuffer(struct Connection* connections, struct ChildInfo* childInfos, 
                                const size_t nChild, const size_t numChilds);
+void CloseUnusedPipes(struct ChildInfo* childInfos, const size_t curChild);

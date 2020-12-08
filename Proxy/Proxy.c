@@ -1,26 +1,17 @@
 #include "lib.h"
 
-//Нихуя не понятно, но очень интересно
-
-//Update: Стало чуть понятнее, но пока все еще интересно
-
-//Update: Вроде разобрался, но пока не работает)
-
-//TODO Дети не умирает, родитель после выполнения виснет
-
 int main(int argc, char** argv)
 {
-	// if (argc != 3){
-	// 	PRINTERROR("Error: Incorrect input\n")
-	// }
+	if (argc != 3){
+		PRINTERROR("Error: Incorrect input\n")
+	}
 
-	//size_t numChilds = ScanNum(argv[1]);
-	size_t numChilds = 3;
+	size_t numChilds = ScanNum(argv[1]);	
 
 	struct ChildInfo* childInfos = calloc(numChilds, sizeof(struct ChildInfo));
 	pid_t ppid = getpid();
 
-	for (unsigned nChild = 0; nChild < numChilds; nChild++){
+	for (size_t nChild = 0; nChild < numChilds; nChild++){
 
 		if (pipe(childInfos[nChild].fifoFromPrnt) == -1)
 			PRINTERROR("Parent: Error in pipe from parent\n")
@@ -37,13 +28,21 @@ int main(int argc, char** argv)
 
 			case 0:  {
 					  TrackPrntDied(ppid);
-					  childInfos[nChild].id = nChild;
-					  ChildFunction(&childInfos[nChild], "text.txt");
+					  CloseUnusedPipes(childInfos, nChild);							  	  
+					  ChildFunction(&childInfos[nChild], argv[2]);
 					  free(childInfos);
 					  exit(EXIT_SUCCESS);
 					 }
 
-			default: {continue;}
+			default: {
+					  if (close(childInfos[nChild].fifoFromPrnt[READ]) == -1)
+					  	  PRINTERROR("Parent: Error in close(from_read)")
+					  childInfos[nChild].fifoFromPrnt[READ] = -1;
+					  if (close(childInfos[nChild].fifoToPrnt[WRITE]) == -1)	
+					  	  PRINTERROR("Parent: Error in close(to_write)")
+					  childInfos[nChild].fifoToPrnt[WRITE] = -1;
+					  continue;
+					  }
 		}
 
 	}
@@ -58,21 +57,15 @@ int main(int argc, char** argv)
 
 void ChildFunction(struct ChildInfo* childInfo, char* filePath)
 {
-    fprintf(stderr, "CHILD [%d]: Start\n", childInfo->id);
+    DBG fprintf(stderr, "CHILD [%d]: Start\n", childInfo->id);    
 
-    if (fcntl(childInfo->fifoToPrnt[WRITE], F_SETFL, O_WRONLY) == -1)
-		PRINTERROR("Child: Error in fcntl(write)\n")
-
-    if (fcntl(childInfo->fifoFromPrnt[READ], F_SETFL, O_RDONLY) == -1)
-		PRINTERROR("Child: Error in fcntl(read)\n")
-
-	if (close(childInfo->fifoFromPrnt[WRITE]) == -1)
-		PRINTERROR("Child: Can`t close pipe from parent [write]\n")
-	childInfo->fifoFromPrnt[WRITE] = -1;
-
-	if (close(childInfo->fifoToPrnt[READ]) == -1)
-		PRINTERROR("Child: Can`t close pipe to parent [READ]\n")
+    if (close(childInfo->fifoToPrnt[READ]) == -1)	
+		PRINTERROR("Child: Error in close(to_read)")
 	childInfo->fifoToPrnt[READ] = -1;
+
+	if (close(childInfo->fifoFromPrnt[WRITE]) == -1)	
+		PRINTERROR("Child: Error in close(from_write)")
+	childInfo->fifoFromPrnt[WRITE] = -1;
 
 	int fd_reader = -1;
 	int fd_writer = childInfo->fifoToPrnt[WRITE];
@@ -80,29 +73,45 @@ void ChildFunction(struct ChildInfo* childInfo, char* filePath)
 	childInfo->pid = getpid();
 
 	if (childInfo->id == 0)
-		fd_reader = open(filePath, O_RDONLY);
+		fd_reader = open(filePath, O_RDONLY);	
 	else
 		fd_reader = childInfo->fifoFromPrnt[READ];
 
 	if (fd_reader < 0)
 		PRINTERROR("Child: Something is wrong with fd_reader\n")
-	
-    ssize_t ret_splice = -1;
-    while (ret_splice) {
-        errno = 0;
-        ret_splice = splice(fd_reader, NULL, fd_writer, NULL,
-                            PIPE_BUF, SPLICE_F_MOVE);
-        if (ret_splice < 0)
-        	PRINTERROR("Child: Error in splice\n")            
-    }
 
-	if (close(fd_reader) == -1)
-		PRINTERROR("Child: Can`t close pipe to fd_reader\n")
+	if (fcntl(fd_writer, F_SETFL, O_WRONLY) == -1)
+		PRINTERROR("Child: Error in fcntl(write)\n")
 
-	if (close(fd_writer)  == -1)
-		PRINTERROR("Child: Can`t close pipe to fd_writer\n")
+    if (fcntl(fd_reader, F_SETFL, O_RDONLY) == -1)
+		PRINTERROR("Child: Error in fcntl(read)\n")
 
-	fprintf(stderr, "CHILD [%d]: End\n", childInfo->id);
+	int ret_read = -1;
+	char buffer[4096];
+	while (true){		
+	    ret_read = read(fd_reader, buffer, 4096);
+	    
+	    if (ret_read < 0)
+	        PRINTERROR("Child: Error in read()\n")
+	    
+	    if (ret_read == 0)
+            break;
+
+		DBG fprintf(stderr, "CHILD [%d]: ChildFunction - read {%s}\n", childInfo->id, buffer);
+
+		if (write(fd_writer, buffer, ret_read) == -1)
+			PRINTERROR("Child: Error in write\n")		
+	}
+
+	if (close(fd_writer) == -1)	
+		PRINTERROR("Child: Error in close(fd_writer)")
+	childInfo->fifoToPrnt[WRITE] = -1;
+
+	if (close(fd_reader) == -1)	
+		PRINTERROR("Child: Error in close(fd_reader)")
+	childInfo->fifoFromPrnt[READ] = -1;
+
+	DBG fprintf(stderr, "CHILD [%d]: End\n", childInfo->id);
 }
 
 void ParentFunction(struct ChildInfo* childInfos, const size_t numChilds)
@@ -119,17 +128,6 @@ void ParentFunction(struct ChildInfo* childInfos, const size_t numChilds)
 
 		PrepareBuffer(connections, childInfos, nChild, numChilds);
 
-		//Closing unused pipes
-		//{
-		if (close(childInfos[nChild].fifoFromPrnt[READ]) == -1)
-			PRINTERROR("Child: Can`t close pipe from parent [read]\n")
-		childInfos[nChild].fifoFromPrnt[READ] = -1;
-
-		if (close(childInfos[nChild].fifoToPrnt[WRITE]) == -1)
-			PRINTERROR("Child: Can`t close pipe to parent [write]\n")
-		childInfos[nChild].fifoToPrnt[WRITE] = -1;
-		//}
-
 		if (fcntl(connections[nChild].fd_reader, F_SETFL, O_RDONLY | O_NONBLOCK) == -1)
 		    PRINTERROR("Parent: Error in fcntl(fd_reader)")
 
@@ -138,7 +136,8 @@ void ParentFunction(struct ChildInfo* childInfos, const size_t numChilds)
 	}	
 
 	size_t cur_alive = 0;
-	while (cur_alive < numChilds - 1){
+	while (cur_alive < numChilds){
+
 		//Preparing for select()
 		//{
 		FD_ZERO(&fd_writers);
@@ -160,7 +159,7 @@ void ParentFunction(struct ChildInfo* childInfos, const size_t numChilds)
 		errno = 0;
 		if (select(maxFD + 1, &fd_readers, &fd_writers, NULL, NULL) < 0)
 			PRINTERROR("Parent: Error in select()\n")	    
-	    maxFD = -1;		
+	    maxFD = -1;			    
 
 	    for (size_t nChild = cur_alive; nChild < numChilds; nChild++){
 			DBG fprintf(stderr, "Parent: [%zu] read: FDISSET = %d, empty = %zu\n", nChild, FD_ISSET(connections[nChild].fd_reader, &fd_readers), connections[nChild].empty);
@@ -174,7 +173,7 @@ void ParentFunction(struct ChildInfo* childInfos, const size_t numChilds)
 			
 
 	        if (connections[nChild].fd_reader == -1 && connections[nChild].fd_writer != -1 && connections[nChild].busy == 0) {
-				close(connections[nChild].fd_writer);
+				close(connections[nChild].fd_writer);								
 				connections[nChild].fd_writer = -1;
 
 				if (cur_alive != nChild)
@@ -184,15 +183,12 @@ void ParentFunction(struct ChildInfo* childInfos, const size_t numChilds)
 				free(connections[nChild].buffer);
 			}
 		}
-	}
-	
+	}	
 
-
-
-	for (size_t nChild = 0; nChild < numChilds; nChild++){		
-		if (waitpid(childInfos[nChild].pid, NULL, 0) < 0)
+	for (size_t nChild = 0; nChild < numChilds; nChild++){
+		if (waitpid(childInfos[nChild].pid, NULL, 0) == -1)
 			PRINTERROR("Parent: Error in waitpid()\n")
-		fprintf(stderr, "Parent: Child [%zu] died successfully\n", nChild);
+		DBG fprintf(stderr, "Parent: child [%zu] died success\n", nChild);
 	}
 	
 	free(connections);
@@ -271,9 +267,27 @@ void PrepareBuffer(struct Connection* connections, struct ChildInfo* childInfos,
 		connections[nChild].fd_writer = childInfos[nChild + 1].fifoFromPrnt[WRITE];
 }
 
+void CloseUnusedPipes(struct ChildInfo* childInfos, const size_t curChild)
+{
+	for (size_t nChild = 0; nChild < curChild; nChild++){
+		if (close(childInfos[nChild].fifoFromPrnt[WRITE]) == -1)	
+			PRINTERROR("Child: Error in close(from_write)")
+		childInfos[nChild].fifoFromPrnt[WRITE] = -1;	
+
+		if (close(childInfos[nChild].fifoToPrnt[READ]) == -1)	
+			PRINTERROR("Child: Error in close(to_read)")
+		childInfos[nChild].fifoToPrnt[READ] = -1;
+	}
+}
+
 size_t CountSize(const unsigned nChild, const unsigned numChilds)
 {
-	return pow(3, numChilds - nChild) * 1024;
+	size_t buf_size = pow(3, numChilds - nChild) * 1024;
+
+	if (buf_size > MAXBUFFSIZE)
+		return MAXBUFFSIZE;
+	else 
+		return buf_size;
 }
 
 void TrackPrntDied(pid_t ppid)
