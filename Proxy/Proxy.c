@@ -38,7 +38,7 @@ int main(int argc, char** argv)
 			case 0:  {
 					  TrackPrntDied(ppid);
 					  childInfos[nChild].id = nChild;
-					  ChildFunction(&childInfos[nChild], "big_text.txt");
+					  ChildFunction(&childInfos[nChild], "text.txt");
 					  free(childInfos);
 					  exit(EXIT_SUCCESS);
 					 }
@@ -58,7 +58,7 @@ int main(int argc, char** argv)
 
 void ChildFunction(struct ChildInfo* childInfo, char* filePath)
 {
-    DBG fprintf(stderr, "CHILD [%d]: Start\n", childInfo->id);
+    fprintf(stderr, "CHILD [%d]: Start\n", childInfo->id);
 
     if (fcntl(childInfo->fifoToPrnt[WRITE], F_SETFL, O_WRONLY) == -1)
 		PRINTERROR("Child: Error in fcntl(write)\n")
@@ -86,22 +86,15 @@ void ChildFunction(struct ChildInfo* childInfo, char* filePath)
 
 	if (fd_reader < 0)
 		PRINTERROR("Child: Something is wrong with fd_reader\n")
-
-	int ret_read = -1;
-	char buffer[4096];
-	while (true){
-	    ret_read = read(fd_reader, buffer, 4096);
-	    if (ret_read < 0)
-	        PRINTERROR("Child: Error in read()\n")
-	    
-	    if (ret_read == 0)
-            break;
-
-		DBG fprintf(stderr, "CHILD [%d]: ChildFunction - read {%s}\n", childInfo->id, buffer);
-
-		if (write(fd_writer, buffer, ret_read) == -1)
-			PRINTERROR("Child: Error in write\n")
-	}
+	
+    ssize_t ret_splice = -1;
+    while (ret_splice) {
+        errno = 0;
+        ret_splice = splice(fd_reader, NULL, fd_writer, NULL,
+                            PIPE_BUF, SPLICE_F_MOVE);
+        if (ret_splice < 0)
+        	PRINTERROR("Child: Error in splice\n")            
+    }
 
 	if (close(fd_reader) == -1)
 		PRINTERROR("Child: Can`t close pipe to fd_reader\n")
@@ -109,7 +102,7 @@ void ChildFunction(struct ChildInfo* childInfo, char* filePath)
 	if (close(fd_writer)  == -1)
 		PRINTERROR("Child: Can`t close pipe to fd_writer\n")
 
-	DBG fprintf(stderr, "CHILD [%d]: End\n", childInfo->id);
+	fprintf(stderr, "CHILD [%d]: End\n", childInfo->id);
 }
 
 void ParentFunction(struct ChildInfo* childInfos, const size_t numChilds)
@@ -196,11 +189,11 @@ void ParentFunction(struct ChildInfo* childInfos, const size_t numChilds)
 
 
 
-	// for (size_t nChild = 0; nChild < numChilds; nChild++){		
-	// 	if (waitpid(childInfos[nChild].pid, NULL, 0) < 0)
-	// 		PRINTERROR("Parent: Error in waitpid()\n")
-	// 	fprintf(stderr, "Parent: Child [%zu] died successfully\n", nChild);
-	// }
+	for (size_t nChild = 0; nChild < numChilds; nChild++){		
+		if (waitpid(childInfos[nChild].pid, NULL, 0) < 0)
+			PRINTERROR("Parent: Error in waitpid()\n")
+		fprintf(stderr, "Parent: Child [%zu] died successfully\n", nChild);
+	}
 	
 	free(connections);
 }
@@ -285,8 +278,8 @@ size_t CountSize(const unsigned nChild, const unsigned numChilds)
 
 void TrackPrntDied(pid_t ppid)
 {
-    // if prctl((PR_SET_PDEATHSIG, SIGTERM) < 0)
-    // 	PRINTERROR("Error in prctl()\n")
+    if prctl((PR_SET_PDEATHSIG, SIGTERM) < 0)
+    	PRINTERROR("Error in prctl()\n")
 
     if (ppid != getppid())
     	PRINTERROR("Error: ppid != getppid()\n")
