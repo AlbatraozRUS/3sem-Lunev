@@ -15,11 +15,11 @@
 #pragma once
 
 enum MODES{
-	READ = 0,
-	WRITE = 1,
+    READ = 0,
+    WRITE = 1,
 };
 
-#define DEBUG_MODE
+//#define DEBUG_MODE
 
 #define PRINTERROR(errorString)\
         {fprintf(stderr, "ATTENTION!\nError occured: ");\
@@ -28,11 +28,11 @@ enum MODES{
          exit(EXIT_FAILURE);}   
 
 struct ChildInfo {
-	unsigned id;
+    unsigned id;
     pid_t pid;
 
-	int fifoToPrnt[2];
-	int fifoFromPrnt[2];
+    int fifoToPrnt[2];
+    int fifoFromPrnt[2];
 };
 
 struct Connection {
@@ -59,8 +59,8 @@ size_t ScanNum(char* number_str);
 void ChildFunction(struct ChildInfo* childInfo, char* filePath);
 void ParentFunction(struct ChildInfo* childInfos, const size_t numChilds);
 size_t CountSize(const unsigned nChild, const unsigned numChilds);
-void WriteFromBuffer(struct Connection* connection, int id);
-void ReadToBuffer(struct Connection* connection, int id);
+void WriteFromBuffer(struct Connection* connection, const int id);
+void ReadToBuffer(struct Connection* connection, const int id);
 void TrackPrntDied(pid_t ppid);
 void PrepareBuffer(struct Connection* connections, struct ChildInfo* childInfos, 
                                const size_t nChild, const size_t numChilds);

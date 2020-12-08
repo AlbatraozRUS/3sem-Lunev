@@ -4,12 +4,15 @@
 
 //Update: Стало чуть понятнее, но пока все еще интересно
 
-//TODO Не работает select (виснет), проблема с кольцевым буфером
+//Update: Вроде разобрался, но пока не работает)
+
+//TODO Дети не умирает, родитель после выполнения виснет
+
 int main(int argc, char** argv)
 {
 	// if (argc != 3){
 	// 	PRINTERROR("Error: Incorrect input\n")
-	// }	
+	// }
 
 	//size_t numChilds = ScanNum(argv[1]);
 	size_t numChilds = 3;
@@ -25,12 +28,6 @@ int main(int argc, char** argv)
 		if (pipe(childInfos[nChild].fifoToPrnt) == -1)
 			PRINTERROR("Parent: Error in pipe to parent\n")
 
-		if (fcntl(childInfos[nChild].fifoFromPrnt[WRITE], F_SETFL, O_WRONLY | O_NONBLOCK) == -1)
-			PRINTERROR("Parent: Error in fcntl(fd_reader)\n")
-
-		if (fcntl(childInfos[nChild].fifoToPrnt[READ], F_SETFL, O_RDONLY | O_NONBLOCK) == -1)
-			PRINTERROR("Parent: Error in fcntl(fd_reader)\n")
-
 		childInfos[nChild].id = nChild;
 
 		int ret_fork = fork();
@@ -41,7 +38,8 @@ int main(int argc, char** argv)
 			case 0:  {
 					  TrackPrntDied(ppid);
 					  childInfos[nChild].id = nChild;
-					  ChildFunction(&childInfos[nChild], "text.txt"); 					  
+					  ChildFunction(&childInfos[nChild], "big_text.txt");
+					  free(childInfos);
 					  exit(EXIT_SUCCESS);
 					 }
 
@@ -53,12 +51,20 @@ int main(int argc, char** argv)
 	ParentFunction(childInfos, numChilds);
 	free(childInfos);
 
+	DBG fprintf(stderr, "\n\nSUCCESS\n");
+
 	return 0;
 }
 
 void ChildFunction(struct ChildInfo* childInfo, char* filePath)
 {
-	DBG fprintf(stderr, "CHILD [%d]: Start\n", childInfo->id);
+    DBG fprintf(stderr, "CHILD [%d]: Start\n", childInfo->id);
+
+    if (fcntl(childInfo->fifoToPrnt[WRITE], F_SETFL, O_WRONLY) == -1)
+		PRINTERROR("Child: Error in fcntl(write)\n")
+
+    if (fcntl(childInfo->fifoFromPrnt[READ], F_SETFL, O_RDONLY) == -1)
+		PRINTERROR("Child: Error in fcntl(read)\n")
 
 	if (close(childInfo->fifoFromPrnt[WRITE]) == -1)
 		PRINTERROR("Child: Can`t close pipe from parent [write]\n")
@@ -66,8 +72,7 @@ void ChildFunction(struct ChildInfo* childInfo, char* filePath)
 
 	if (close(childInfo->fifoToPrnt[READ]) == -1)
 		PRINTERROR("Child: Can`t close pipe to parent [READ]\n")
-	childInfo->fifoToPrnt[READ] 
-	= -1;
+	childInfo->fifoToPrnt[READ] = -1;
 
 	int fd_reader = -1;
 	int fd_writer = childInfo->fifoToPrnt[WRITE];
@@ -75,47 +80,49 @@ void ChildFunction(struct ChildInfo* childInfo, char* filePath)
 	childInfo->pid = getpid();
 
 	if (childInfo->id == 0)
-		fd_reader = open(filePath, O_RDONLY);		
-	else 
-		fd_reader = childInfo->fifoFromPrnt[READ];	
+		fd_reader = open(filePath, O_RDONLY);
+	else
+		fd_reader = childInfo->fifoFromPrnt[READ];
 
 	if (fd_reader < 0)
 		PRINTERROR("Child: Something is wrong with fd_reader\n")
 
 	int ret_read = -1;
 	char buffer[4096];
-	while (ret_read){	
-		ret_read = read(fd_reader, buffer, 4096);
-		if (ret_read < 0)
-			PRINTERROR("Child: Error in read\n")
+	while (true){
+	    ret_read = read(fd_reader, buffer, 4096);
+	    if (ret_read < 0)
+	        PRINTERROR("Child: Error in read()\n")
+	    
+	    if (ret_read == 0)
+            break;
 
 		DBG fprintf(stderr, "CHILD [%d]: ChildFunction - read {%s}\n", childInfo->id, buffer);
 
-		if (write(childInfo->fifoToPrnt[WRITE], buffer, ret_read) == -1)
+		if (write(fd_writer, buffer, ret_read) == -1)
 			PRINTERROR("Child: Error in write\n")
 	}
 
 	if (close(fd_reader) == -1)
 		PRINTERROR("Child: Can`t close pipe to fd_reader\n")
-	fd_reader = -1;
 
 	if (close(fd_writer)  == -1)
 		PRINTERROR("Child: Can`t close pipe to fd_writer\n")
-	fd_writer = -1;
 
 	DBG fprintf(stderr, "CHILD [%d]: End\n", childInfo->id);
 }
 
 void ParentFunction(struct ChildInfo* childInfos, const size_t numChilds)
 {
+	DBG fprintf(stderr, "Parent: Start\n");
 	int maxFD = -1;
-	fd_set fd_writers, fd_readers;	
+	fd_set fd_writers, fd_readers;
 
 	struct Connection* connections = calloc(numChilds, sizeof(struct Connection));
 	if (connections == NULL)
 		PRINTERROR("Parent: Error in calloc(connections)\n")
 
-	for (size_t nChild = 0; nChild < numChilds; nChild++){	
+	for (size_t nChild = 0; nChild < numChilds; nChild++){
 
 		PrepareBuffer(connections, childInfos, nChild, numChilds);
 
@@ -130,131 +137,129 @@ void ParentFunction(struct ChildInfo* childInfos, const size_t numChilds)
 		childInfos[nChild].fifoToPrnt[WRITE] = -1;
 		//}
 
+		if (fcntl(connections[nChild].fd_reader, F_SETFL, O_RDONLY | O_NONBLOCK) == -1)
+		    PRINTERROR("Parent: Error in fcntl(fd_reader)")
+
+		if (fcntl(connections[nChild].fd_writer, F_SETFL, O_WRONLY | O_NONBLOCK) == -1)
+		    PRINTERROR("Parent: Error in fcntl(fd_writer)")
+	}	
+
+	size_t cur_alive = 0;
+	while (cur_alive < numChilds - 1){
 		//Preparing for select()
 		//{
 		FD_ZERO(&fd_writers);
 		FD_ZERO(&fd_readers);
-		for (size_t iChild = nChild; iChild < numChilds; iChild++){
 
-			FD_SET(connections[iChild].fd_reader, &fd_readers);
-			FD_SET(connections[iChild].fd_writer, &fd_writers);
+		for (size_t nChild = cur_alive; nChild < numChilds; nChild++){
+			if (connections[nChild].fd_reader != -1)
+				FD_SET(connections[nChild].fd_reader, &fd_readers);
+			if (connections[nChild].fd_writer != -1)
+				FD_SET(connections[nChild].fd_writer, &fd_writers);
 
-			if (connections[iChild].fd_reader > maxFD)
-				maxFD = connections[iChild].fd_reader;
-			if (connections[iChild].fd_writer > maxFD)
-				maxFD = connections[iChild].fd_writer;
+			if (connections[nChild].fd_reader > maxFD)
+				maxFD = connections[nChild].fd_reader;
+			if (connections[nChild].fd_writer > maxFD)
+				maxFD = connections[nChild].fd_writer;
 		}
-		//}
+		//}		
 
 		errno = 0;
-		if (select(maxFD + 1, &fd_readers, &fd_writers, NULL, NULL) < 0 && errno != EINTR)
-			PRINTERROR("Parent: Error in select\n")
-		maxFD = -1;
+		if (select(maxFD + 1, &fd_readers, &fd_writers, NULL, NULL) < 0)
+			PRINTERROR("Parent: Error in select()\n")	    
+	    maxFD = -1;		
 
+	    for (size_t nChild = cur_alive; nChild < numChilds; nChild++){
+			DBG fprintf(stderr, "Parent: [%zu] read: FDISSET = %d, empty = %zu\n", nChild, FD_ISSET(connections[nChild].fd_reader, &fd_readers), connections[nChild].empty);
+			if (FD_ISSET(connections[nChild].fd_reader, &fd_readers) && connections[nChild].empty > 0)
+				ReadToBuffer(&connections[nChild], nChild);
+			
 
-		DBG fprintf(stderr, "PARENT: [%zu] ParentFunction - begin of cycle\n[\n", nChild);
-		for (size_t iChild = nChild; iChild < numChilds; iChild++){
+			DBG fprintf(stderr, "Parent: [%zu] write: FDISSET = %d, busy = %zu\n", nChild, FD_ISSET(connections[nChild].fd_writer, &fd_writers), connections[nChild].busy);
+			if (FD_ISSET(connections[nChild].fd_writer, &fd_writers) && connections[nChild].busy > 0)
+				WriteFromBuffer(&connections[nChild], nChild);
+			
 
-			DBG fprintf(stderr, "Parent: [%zu] read: FDISSET = %d, empty = %zu\n", iChild, FD_ISSET(connections[iChild].fd_reader, &fd_readers), connections[iChild].empty);
-			if (FD_ISSET(connections[iChild].fd_reader, &fd_readers) /*&& connections[iChild].empty > 0*/){				
-				int ret_read = read(connections[nChild].fd_reader, connections[nChild].buffer, connections[nChild].empty);
-				if (ret_read < 0)
-					PRINTERROR("Parent: Error in read\n")
-				connections[nChild].empty -= ret_read;
-				connections[nChild].busy += ret_read;
-				//ReadToBuffer(&connections[iChild], iChild);			
+	        if (connections[nChild].fd_reader == -1 && connections[nChild].fd_writer != -1 && connections[nChild].busy == 0) {
+				close(connections[nChild].fd_writer);
+				connections[nChild].fd_writer = -1;
+
+				if (cur_alive != nChild)
+	                PRINTERROR("Parent: One of childs is dead\n")
+
+	            cur_alive++;
+				free(connections[nChild].buffer);
 			}
-
-			DBG fprintf(stderr, "Parent: [%zu] write: FDISSET = %d, busy = %zu\n", iChild, FD_ISSET(connections[iChild].fd_writer, &fd_writers), connections[iChild].busy);
-			if (FD_ISSET(connections[iChild].fd_writer, &fd_writers) /*&& connections[iChild].busy > 0*/){
-				int ret_write = write(connections[nChild].fd_writer, connections[nChild].buffer, connections[nChild].busy);
-				if (ret_write < 0)
-					PRINTERROR("Parent: Error in read\n")
-
-				connections[nChild].busy -= ret_write;
-				connections[nChild].empty += ret_write;
-				//WriteFromBuffer(&connections[iChild], iChild);		
-			}
-
-			if (close(connections[iChild].fd_writer) == -1)
-				PRINTERROR("Child: Can`t close pipe to fd_writer\n")
-			connections[iChild].fd_writer = -1;
-
-			if (close(connections[iChild].fd_reader) == -1)
-				PRINTERROR("Child: Can`t close pipe to fd_reader\n")
-			connections[iChild].fd_reader = -1;
-
-		}		
-		DBG fprintf(stderr, "]\n");
+		}
 	}
+	
 
 
 
-	// for (size_t nChild = 0; nChild < numChilds; nChild++){
-	// 	free(connections[nChild].buffer);
+	// for (size_t nChild = 0; nChild < numChilds; nChild++){		
 	// 	if (waitpid(childInfos[nChild].pid, NULL, 0) < 0)
-	// 		PRINTERROR("Parent: Error in waitpid()\n")	
-	// 		fprintf(stderr, "Child [%zu] died\n", nChild);				
-	// 	}
-
-	// free(childInfos);
-	// free(connections);		
-}
-
-void ReadToBuffer(struct Connection* connection, int id)
-{
-	int ret_read =  read(connection->fd_reader, &connection->buffer[connection->iRead], connection->empty);
-	if (ret_read < 0)
-		PRINTERROR("Child: ReadToBuffer: Error in read()\n")
-
-	if (ret_read == 0){
-		close(connection->fd_reader);
-		connection->fd_reader = -1;
-	}
-
-	if (connection->iRead >= connection->iWrite)
-		connection->busy += ret_read;
-
-	if (connection->iRead + ret_read == connection->buf_size){
-		connection->iRead = 0;
-		connection->empty = connection->iWrite;
-	}
-	else {		
-		connection->empty += ret_read;
-		connection->iRead -= ret_read;	
-	}
-
-
-	DBG fprintf(stderr, "Child:[%d] ReadToBuffer {%s}\n", id, connection->buffer);
+	// 		PRINTERROR("Parent: Error in waitpid()\n")
+	// 	fprintf(stderr, "Parent: Child [%zu] died successfully\n", nChild);
+	// }
 	
+	free(connections);
 }
 
-void WriteFromBuffer(struct Connection* connection, int id)
+void ReadToBuffer(struct Connection* connection, const int id)
 {
-	errno = 0;
-	int ret_write =  write(connection->fd_writer, &connection->buffer[connection->iWrite], connection->busy);
-	if (ret_write < 0 && errno != EAGAIN)
-		PRINTERROR("Child: ReadToBuffer: Error in read()\n")
+    size_t ret_read = read(connection->fd_reader, &connection->buffer[connection->iRead], connection->empty);
+    if (ret_read < 0) 
+        PRINTERROR("Parent: ReadToBuffer: Error in read\n")
+    
+    if (ret_read == 0) {
+        close(connection->fd_reader);
+        connection->fd_reader = -1;
+        return;
+    }
 
-	DBG fprintf(stderr, "Child:[%d] WriteFromBuffer {%s}\n", id, connection->buffer);
+    if (connection->iRead >= connection->iWrite)
+        connection->busy += ret_read;
 
-	if (connection->iWrite >= connection->iRead)
-		connection->empty += ret_write;
-	
-	if (connection->iWrite + ret_write == connection->buf_size){
-		connection->iWrite = 0;
-		connection->busy = connection->iRead;
-	}
-	else {
-		connection->iWrite += ret_write;
-		connection->busy -= ret_write;
-	}
+    if (connection->iRead + ret_read == connection->buf_size) {
+        connection->iRead = 0;
+        connection->empty = connection->iWrite;
+    }
+    else {
+        connection->iRead += ret_read;
+        connection->empty -= ret_read;
+    }
+
+
+	DBG fprintf(stderr, "Parent: [%d] ReadToBuffer {%s}\n", id, connection->buffer);
 }
 
-void PrepareBuffer(struct Connection* connections, struct ChildInfo* childInfos, 
-							   const size_t nChild, const size_t numChilds)
+void WriteFromBuffer(struct Connection* connection, const int id)
 {	
-	connections[nChild].buf_size = CountSize(nChild, numChilds);		
+    size_t ret_write = write(connection->fd_writer, &connection->buffer[connection->iWrite], connection->busy);
+    if (ret_write < 0 && errno != EAGAIN) {
+        perror("Error write");
+        exit(EXIT_FAILURE);
+    }
+
+    if (connection->iWrite >= connection->iRead)
+        connection->empty += ret_write;
+
+    if (connection->iWrite + ret_write == connection->buf_size) {
+        connection->iWrite = 0;
+        connection->busy = connection->iRead;
+    }
+    else {
+        connection->iWrite += ret_write;
+        connection->busy -= ret_write;
+    }
+
+	DBG fprintf(stderr, "Parent: [%d] WriteFromBuffer {%s}\n", id, connection->buffer);
+}
+
+void PrepareBuffer(struct Connection* connections, struct ChildInfo* childInfos,
+							   const size_t nChild, const size_t numChilds)
+{
+	connections[nChild].buf_size = CountSize(nChild, numChilds);
 	connections[nChild].buffer = calloc(connections[nChild].buf_size, 1);
 	if (connections[nChild].buffer == NULL)
 		PRINTERROR("Parent: Can`t create buffer\n")
@@ -266,16 +271,16 @@ void PrepareBuffer(struct Connection* connections, struct ChildInfo* childInfos,
 	connections[nChild].empty = connections[nChild].buf_size;
 
 	connections[nChild].fd_reader = childInfos[nChild].fifoToPrnt[READ];
-		
+
 	if (nChild == numChilds -1)
 		connections[nChild].fd_writer = STDOUT_FILENO;
-	else 		
-		connections[nChild].fd_writer = childInfos[nChild + 1].fifoFromPrnt[WRITE];	
+	else
+		connections[nChild].fd_writer = childInfos[nChild + 1].fifoFromPrnt[WRITE];
 }
 
 size_t CountSize(const unsigned nChild, const unsigned numChilds)
-{	
-	return pow(3, numChilds - nChild) * 1024;	
+{
+	return pow(3, numChilds - nChild) * 1024;
 }
 
 void TrackPrntDied(pid_t ppid)
@@ -284,7 +289,7 @@ void TrackPrntDied(pid_t ppid)
     // 	PRINTERROR("Error in prctl()\n")
 
     if (ppid != getppid())
-    	PRINTERROR("Error: ppid != getppid()\n")           
+    	PRINTERROR("Error: ppid != getppid()\n")
 }
 
 size_t ScanNum(char* number_str)
@@ -292,7 +297,7 @@ size_t ScanNum(char* number_str)
 	char* endptr = calloc(10,1);
 
 	unsigned long long N = strtoul(number_str, &endptr, 10);
-	if (!(*endptr == '\0') || errno == ERANGE){
+	if (*endptr != '\0' || errno == ERANGE){
 		fprintf(stderr, "Something is wrong with your input\n");
 		abort();
 	}
