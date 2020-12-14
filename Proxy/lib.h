@@ -21,7 +21,7 @@ enum MODES{
 
 const size_t MAXBUFFSIZE = 1000000;
 
-//#define DEBUG_MODE
+#define DEBUG_MODE
 
 #define PRINTERROR(errorString)\
         {fprintf(stderr, "ATTENTION!\nError occured: ");\

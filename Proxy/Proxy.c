@@ -292,8 +292,8 @@ size_t CountSize(const unsigned nChild, const unsigned numChilds)
 
 void TrackPrntDied(pid_t ppid)
 {
-    //if prctl((PR_SET_PDEATHSIG, SIGTERM) < 0)
-    //	PRINTERROR("Error in prctl()\n")
+    if prctl((PR_SET_PDEATHSIG, SIGTERM) < 0)
+    	PRINTERROR("Error in prctl()\n")
 
     if (ppid != getppid())
     	PRINTERROR("Error: ppid != getppid()\n")
