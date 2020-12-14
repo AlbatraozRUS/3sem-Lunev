@@ -144,9 +144,9 @@ void ParentFunction(struct ChildInfo* childInfos, const size_t numChilds)
 		FD_ZERO(&fd_readers);
 
 		for (size_t nChild = cur_alive; nChild < numChilds; nChild++){
-			if (connections[nChild].fd_reader != -1)
+			if (connections[nChild].fd_reader != -1 && connections[nChild].empty > 0)
 				FD_SET(connections[nChild].fd_reader, &fd_readers);
-			if (connections[nChild].fd_writer != -1)
+			if (connections[nChild].fd_writer != -1 && connections[nChild].busy > 0)
 				FD_SET(connections[nChild].fd_writer, &fd_writers);
 
 			if (connections[nChild].fd_reader > maxFD)
@@ -292,8 +292,8 @@ size_t CountSize(const unsigned nChild, const unsigned numChilds)
 
 void TrackPrntDied(pid_t ppid)
 {
-    if prctl((PR_SET_PDEATHSIG, SIGTERM) < 0)
-    	PRINTERROR("Error in prctl()\n")
+    //if prctl((PR_SET_PDEATHSIG, SIGTERM) < 0)
+    //	PRINTERROR("Error in prctl()\n")
 
     if (ppid != getppid())
     	PRINTERROR("Error: ppid != getppid()\n")
